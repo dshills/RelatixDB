@@ -92,7 +92,7 @@ func (qe *QueryEngine) queryFind(ctx context.Context, query Query) (*QueryResult
 		return nil, fmt.Errorf("filters are required for find queries")
 	}
 
-	nodes := make([]Node, 0)
+	var nodes []Node
 
 	// Check if searching by type
 	if nodeType, exists := query.Filters["type"]; exists {
@@ -201,7 +201,7 @@ type pathState struct {
 
 // buildPathNodes converts a path of node IDs to a path of Node objects
 func (qe *QueryEngine) buildPathNodes(ctx context.Context, nodeIDs []string) ([]Node, error) {
-	var nodes []Node
+	nodes := make([]Node, 0, len(nodeIDs))
 
 	for _, id := range nodeIDs {
 		node, err := qe.graph.GetNode(ctx, id)

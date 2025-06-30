@@ -31,27 +31,40 @@ The database operates via JSON commands on stdin with JSON responses on stdout:
 ```
 
 ## Development Commands
-Since this is a new Go project with only a go.mod file:
+This project includes a comprehensive Makefile for development tasks:
 
 ```bash
-# Initialize and build
-go mod tidy
-go build ./...
+# Essential commands
+make help              # Show all available targets
+make build             # Build the RelatixDB binary
+make test              # Run all tests
+make test-mcp          # Run comprehensive MCP tool function tests
+make validate          # Run all validation checks (lint, vet, test)
 
-# Run tests (when implemented)
-go test ./...
+# Testing commands
+make test-unit         # Run unit tests only
+make test-integration  # Run integration tests
+make test-bench        # Run benchmark tests
+make test-coverage     # Run tests with coverage report
+make test-race         # Run tests with race detector
 
-# Run with race detection
-go test -race ./...
+# Development workflow
+make fmt              # Format Go code
+make lint             # Run golangci-lint
+make vet              # Run go vet
+make clean            # Clean build artifacts
+make pre-commit       # Run checks before committing
 
-# Format code
-go fmt ./...
+# Running RelatixDB
+make run              # Run in memory mode with debug
+make run-persistent   # Run with persistent storage
+make dev              # Run in development mode
 
-# Lint (requires golangci-lint)
-golangci-lint run
-
-# Build binary
-go build -o relatixdb ./cmd/relatixdb
+# Direct Go commands (if needed)
+go mod tidy           # Tidy modules
+go test ./...         # Run all tests
+go test -race ./...   # Run with race detection
+golangci-lint run     # Lint code
 ```
 
 ## Performance Targets

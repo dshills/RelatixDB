@@ -259,7 +259,7 @@ func (b *BoltBackend) updateStats() {
 		// Get database file size (simplified approach)
 		if stat := b.db.Stats(); stat.TxStats.PageCount > 0 {
 			// Use a reasonable page size estimate
-			b.stats.DatabaseSize = int64(stat.TxStats.PageCount) * 4096
+			b.stats.DatabaseSize = stat.TxStats.PageCount * 4096
 		}
 
 		// Count nodes

@@ -5,6 +5,15 @@ import (
 	"fmt"
 )
 
+// Command constants
+const (
+	CmdAddNode    = "add_node"
+	CmdAddEdge    = "add_edge"
+	CmdDeleteNode = "delete_node"
+	CmdDeleteEdge = "delete_edge"
+	CmdQuery      = "query"
+)
+
 // Command represents an MCP command received via stdin
 type Command struct {
 	Cmd  string          `json:"cmd"`
@@ -74,35 +83,35 @@ func ParseCommand(data []byte) (*Command, error) {
 // ParseArgs parses the command arguments into the appropriate struct
 func (c *Command) ParseArgs() (interface{}, error) {
 	switch c.Cmd {
-	case "add_node":
+	case CmdAddNode:
 		var args AddNodeArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse add_node args: %w", err)
 		}
 		return args, nil
 
-	case "add_edge":
+	case CmdAddEdge:
 		var args AddEdgeArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse add_edge args: %w", err)
 		}
 		return args, nil
 
-	case "delete_node":
+	case CmdDeleteNode:
 		var args DeleteNodeArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse delete_node args: %w", err)
 		}
 		return args, nil
 
-	case "delete_edge":
+	case CmdDeleteEdge:
 		var args DeleteEdgeArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse delete_edge args: %w", err)
 		}
 		return args, nil
 
-	case "query":
+	case CmdQuery:
 		var args QueryArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse query args: %w", err)

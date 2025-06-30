@@ -89,15 +89,15 @@ func (h *Handler) processCommand(ctx context.Context, commandLine string) *Respo
 
 	// Execute the command
 	switch cmd.Cmd {
-	case "add_node":
+	case CmdAddNode:
 		return h.handleAddNode(ctx, args.(AddNodeArgs))
-	case "add_edge":
+	case CmdAddEdge:
 		return h.handleAddEdge(ctx, args.(AddEdgeArgs))
-	case "delete_node":
+	case CmdDeleteNode:
 		return h.handleDeleteNode(ctx, args.(DeleteNodeArgs))
-	case "delete_edge":
+	case CmdDeleteEdge:
 		return h.handleDeleteEdge(ctx, args.(DeleteEdgeArgs))
-	case "query":
+	case CmdQuery:
 		return h.handleQuery(ctx, args.(QueryArgs))
 	default:
 		return NewErrorResponse(fmt.Errorf("unknown command: %s", cmd.Cmd))
