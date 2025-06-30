@@ -69,9 +69,9 @@ tmp/
 data/
 # Exception: Include project knowledge base
 !data/
-!data/embeddix-memory.db
+!data/relatix-memory.db
 data/*
-!data/embeddix-memory.db
+!data/relatix-memory.db
 backups/
 exports/
 
