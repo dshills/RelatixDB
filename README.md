@@ -134,6 +134,199 @@ Error responses:
 }
 ```
 
+## Claude Code Integration
+
+RelatixDB can be integrated with Claude Code as an MCP (Model Context Protocol) server to provide graph database capabilities directly within your AI-assisted development workflow.
+
+### Prerequisites
+
+- [Claude Code](https://claude.ai/code) installed and configured
+- RelatixDB binary built or installed (see Installation section above)
+
+### Configuration
+
+#### 1. Build RelatixDB
+
+First, ensure RelatixDB is built and accessible:
+
+```bash
+git clone https://github.com/dshills/RelatixDB.git
+cd RelatixDB
+make build
+# Binary will be at ./build/relatixdb
+```
+
+#### 2. Configure MCP Server
+
+Add RelatixDB to your Claude Code MCP configuration. The exact method depends on your Claude Code setup:
+
+**Option A: Direct Configuration**
+```json
+{
+  "mcp": {
+    "servers": {
+      "relatixdb": {
+        "command": "/path/to/RelatixDB/build/relatixdb",
+        "args": ["-db", "/path/to/your/graph.db", "-debug"],
+        "env": {}
+      }
+    }
+  }
+}
+```
+
+**Option B: In-Memory Mode (Fast, Non-Persistent)**
+```json
+{
+  "mcp": {
+    "servers": {
+      "relatixdb": {
+        "command": "/path/to/RelatixDB/build/relatixdb",
+        "args": ["-debug"],
+        "env": {}
+      }
+    }
+  }
+}
+```
+
+#### 3. Verify Integration
+
+Start Claude Code and verify the MCP server is running:
+
+```bash
+# In Claude Code, you should be able to use commands like:
+# "Add a node to the graph database"
+# "Query relationships in the database"
+# "Show me all nodes of type 'function'"
+```
+
+### Using RelatixDB in Claude Code
+
+Once integrated, you can use natural language to interact with your graph database:
+
+#### Adding Data
+```
+"Add a node with ID 'main.go' of type 'file' with property 'language' set to 'go'"
+
+"Create an edge from 'main.go' to 'config.go' with label 'imports'"
+```
+
+#### Querying Data
+```
+"Show me all neighbors of node 'main.go'"
+
+"Find all nodes of type 'function' that are connected to 'main.go'"
+
+"Find paths between 'frontend.js' and 'backend.go' with max depth 3"
+```
+
+#### Code Analysis Workflows
+```
+"Analyze this codebase and create a function call graph in RelatixDB"
+
+"Track the relationships between these modules in the graph database"
+
+"Store the dependencies I just discussed in RelatixDB for future reference"
+```
+
+### Common Use Cases with Claude Code
+
+#### 1. Codebase Mapping
+- Store relationships between files, functions, and modules
+- Track dependencies and imports
+- Build call graphs and reference networks
+
+#### 2. Development Context
+- Remember previous discussions and decisions
+- Track tool actions and their relationships
+- Store architectural knowledge and patterns
+
+#### 3. Refactoring Support
+- Query impact analysis before changes
+- Track relationships that might be affected
+- Store refactoring history and rationale
+
+#### 4. Documentation Generation
+- Extract relationship patterns for documentation
+- Generate dependency graphs and diagrams
+- Track knowledge connections across the project
+
+### Storage Recommendations
+
+#### For Development Sessions
+Use in-memory mode for fast, temporary storage:
+```json
+"command": "/path/to/relatixdb",
+"args": ["-debug"]
+```
+
+#### For Persistent Projects
+Use persistent storage to maintain context across sessions:
+```json
+"command": "/path/to/relatixdb",
+"args": ["-db", "~/.claude-code/graphs/myproject.db", "-debug"]
+```
+
+### Troubleshooting
+
+#### Connection Issues
+1. Verify RelatixDB binary path is correct
+2. Check file permissions on the binary
+3. Ensure database directory exists (for persistent mode)
+4. Review Claude Code logs for MCP server errors
+
+#### Performance Considerations
+- In-memory mode: Fastest, but data lost on restart
+- Persistent mode: Slightly slower writes, data preserved
+- Debug mode: Adds logging overhead, disable for production use
+
+#### Database Location
+Choose database location based on your workflow:
+- Project-specific: `./project-graph.db` (committed with project)
+- User-specific: `~/.claude-code/graphs/project.db` (personal, not committed)
+- Session-specific: In-memory mode (temporary, fast)
+
+### Advanced Configuration
+
+#### Custom Tool Names
+You can customize how RelatixDB appears in Claude Code by modifying the server name:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "project-knowledge-graph": {
+        "command": "/path/to/relatixdb",
+        "args": ["-db", "./knowledge-graph.db"]
+      }
+    }
+  }
+}
+```
+
+#### Multiple Instances
+Run multiple RelatixDB instances for different purposes:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "code-graph": {
+        "command": "/path/to/relatixdb",
+        "args": ["-db", "./code-relationships.db"]
+      },
+      "decisions-graph": {
+        "command": "/path/to/relatixdb", 
+        "args": ["-db", "./architectural-decisions.db"]
+      }
+    }
+  }
+}
+```
+
+This integration enables Claude Code to leverage RelatixDB's high-performance graph capabilities for enhanced context management and relationship tracking in your development workflow.
+
 ## Data Model
 
 ### Nodes
