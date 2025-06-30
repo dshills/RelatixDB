@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dshills/RelatixDB/internal/graph"
 	"github.com/dshills/RelatixDB/internal/mcp"
+	"github.com/dshills/RelatixDB/internal/storage"
 )
 
 const (
@@ -65,11 +67,26 @@ func main() {
 	// Initialize the graph
 	var g graph.Graph
 	if *dbPath != "" {
-		// TODO: Initialize persistent graph when storage layer is implemented
-		if *debug {
-			log.Printf("Persistent storage not yet implemented, using in-memory graph")
+		// Initialize persistent graph with BoltDB backend
+		backend := storage.NewBoltBackend()
+		if err := backend.Open(*dbPath); err != nil {
+			log.Fatalf("Failed to open database: %v", err)
 		}
-		g = graph.NewMemoryGraph()
+		defer backend.Close()
+		
+		// Disable auto-save until SaveGraph is fully implemented
+		persistentGraph := storage.NewPersistentGraph(backend, false, 30*time.Second)
+		if err := persistentGraph.Load(ctx); err != nil {
+			if *debug {
+				log.Printf("No existing database found, starting with empty graph: %v", err)
+			}
+		}
+		defer persistentGraph.Close()
+		
+		g = persistentGraph
+		if *debug {
+			log.Printf("Using persistent graph storage at %s", *dbPath)
+		}
 	} else {
 		g = graph.NewMemoryGraph()
 		if *debug {
