@@ -67,24 +67,33 @@ RelatixDB is designed as a high-performance, local graph database optimized for 
 **Location**: `internal/mcp/`
 
 **Responsibilities**:
-- Parse JSON commands from stdin
-- Validate command structure and arguments
-- Route commands to appropriate graph operations
-- Format responses as JSON to stdout
-- Handle errors gracefully
+- Implement standard Model Context Protocol (MCP) using JSON-RPC 2.0
+- Handle server initialization and capability negotiation
+- Provide tool discovery via `tools/list` method
+- Execute graph operations via `tools/call` method
+- Format responses according to MCP specification
 
 **Key Components**:
-- `handler.go`: Main MCP protocol handler
-- `types.go`: Command/response type definitions
-- `handler_test.go`: Protocol testing
+- `handler.go`: Main MCP JSON-RPC protocol handler
+- `protocol.go`: MCP protocol types and JSON-RPC structures
+- `types.go`: Legacy command types (deprecated)
+- `handler_test.go`: MCP protocol testing
+- `integration_test.go`: End-to-end MCP functionality tests
 
-**Command Flow**:
-1. Read JSON line from stdin
-2. Parse into Command struct
-3. Validate command and arguments
-4. Execute via Graph interface
-5. Format result as Response
-6. Write JSON line to stdout
+**MCP Protocol Flow**:
+1. **Initialization**: Client sends `initialize` request with capabilities
+2. **Tool Discovery**: Client calls `tools/list` to discover available tools
+3. **Tool Execution**: Client uses `tools/call` to execute specific graph operations
+4. **Error Handling**: Standard JSON-RPC errors and MCP tool error responses
+
+**Available MCP Tools**:
+- `add_node`: Add nodes with ID, type, and properties
+- `add_edge`: Add directed, labeled edges between nodes
+- `delete_node`: Delete nodes and connected edges
+- `delete_edge`: Delete specific edges
+- `query_neighbors`: Find neighboring nodes with direction filtering
+- `query_paths`: Find paths between nodes with depth limiting
+- `query_find`: Search nodes by type and properties
 
 ### Graph Layer
 
@@ -171,26 +180,28 @@ type Backend interface {
 ### Write Operations
 
 ```
-MCP Command → Validation → Memory Update → Transaction → Persist → Response
+MCP Tool Call → JSON-RPC Parsing → Tool Execution → Memory Update → Transaction → Persist → MCP Response
 ```
 
-1. **Validation**: Check command structure and business rules
-2. **Memory Update**: Apply change to in-memory graph
-3. **Transaction**: Begin storage transaction
-4. **Persist**: Write change to storage
-5. **Commit/Rollback**: Complete transaction or rollback both memory and storage
-6. **Response**: Return success/error to client
+1. **JSON-RPC Parsing**: Parse `tools/call` request and validate JSON-RPC structure
+2. **Tool Execution**: Route to appropriate tool handler with argument validation
+3. **Memory Update**: Apply change to in-memory graph
+4. **Transaction**: Begin storage transaction
+5. **Persist**: Write change to storage
+6. **Commit/Rollback**: Complete transaction or rollback both memory and storage
+7. **MCP Response**: Return tool result as JSON-RPC response with success/error status
 
 ### Read Operations
 
 ```
-MCP Query → Memory Graph → Query Engine → Response
+MCP Tool Call → JSON-RPC Parsing → Query Tool Execution → Memory Graph → Query Engine → MCP Response
 ```
 
-1. **Parse Query**: Extract query type and parameters
-2. **Execute**: Run query against in-memory indexes
-3. **Format**: Convert results to JSON response
-4. **Return**: Send response to client
+1. **JSON-RPC Parsing**: Parse `tools/call` request for query tools
+2. **Query Tool Execution**: Route to query tool handler (neighbors, paths, find)
+3. **Execute**: Run query against in-memory indexes
+4. **Format**: Convert results to structured text response
+5. **MCP Response**: Return tool result as JSON-RPC response
 
 ## Performance Architecture
 

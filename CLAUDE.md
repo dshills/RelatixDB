@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-RelatixDB is a high-performance, local graph database designed for use as a Model Context Protocol (MCP) tool. It's optimized for fast, local, contextual knowledge manipulation by LLMs, not as an enterprise-grade database.
+RelatixDB is a high-performance, local graph database designed for use as a Model Context Protocol (MCP) tool server. It's optimized for fast, local, contextual knowledge manipulation by LLMs, not as an enterprise-grade database.
 
 ## Key Architecture Concepts
 
@@ -13,21 +13,38 @@ RelatixDB is a high-performance, local graph database designed for use as a Mode
 - **Multigraph**: Multiple edges of different types allowed between same nodes
 
 ### Storage Engine
-- Backed by LMDB, BoltDB, or custom mmap-based store
+- Backed by BoltDB for persistent storage or in-memory for speed
 - Read-optimized with append-only or journaling for writes
 - Indexed by node ID, type, and edge relationships
 
-### Interface Modes
-1. **MCP Tool Server**: JSON-based stdio interface for LLM interaction
-2. **Go API**: Optional embedded Go package interface
+### Interface Mode
+**MCP Tool Server**: Standard Model Context Protocol implementation using JSON-RPC 2.0 over stdio for LLM interaction
 
-## Command Interface
-The database operates via JSON commands on stdin with JSON responses on stdout:
+## MCP Protocol Interface
+RelatixDB implements the standard Model Context Protocol (MCP) using JSON-RPC 2.0. All communication follows the official MCP specification.
 
+### Server Initialization
 ```json
-{"cmd": "add_node", "args": {"id": "node_id", "type": "type", "props": {}}}
-{"cmd": "add_edge", "args": {"from": "id1", "to": "id2", "label": "relationship"}}
-{"cmd": "query", "args": {"type": "neighbors", "node": "id", "direction": "out"}}
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "client", "version": "1.0"}}}
+```
+
+### Tool Discovery
+```json
+{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
+```
+
+### Available MCP Tools
+1. **add_node** - Add nodes with ID, type, and properties
+2. **add_edge** - Add directed, labeled edges between nodes  
+3. **delete_node** - Delete nodes (and connected edges)
+4. **delete_edge** - Delete specific edges
+5. **query_neighbors** - Find neighboring nodes
+6. **query_paths** - Find paths between nodes
+7. **query_find** - Search nodes by type/properties
+
+### Tool Execution Example
+```json
+{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "add_node", "arguments": {"id": "node_id", "type": "type", "props": {"key": "value"}}}}
 ```
 
 ## Development Commands
@@ -38,7 +55,7 @@ This project includes a comprehensive Makefile for development tasks:
 make help              # Show all available targets
 make build             # Build the RelatixDB binary
 make test              # Run all tests
-make test-mcp          # Run comprehensive MCP tool function tests
+make test-mcp          # Run comprehensive MCP protocol tests
 make validate          # Run all validation checks (lint, vet, test)
 
 # Testing commands
@@ -53,7 +70,6 @@ make fmt              # Format Go code
 make lint             # Run golangci-lint
 make vet              # Run go vet
 make clean            # Clean build artifacts
-make pre-commit       # Run checks before committing
 
 # Running RelatixDB
 make run              # Run in memory mode with debug
@@ -81,6 +97,12 @@ golangci-lint run     # Lint code
 
 ## Tool Memories
 - Use embeddix tools to save and pull relevant project information
-- store builds in build/ directory
+- Store builds in build/ directory
 - Use second-opinion to check code before commit
 - Use docs/ for documentation and planning documents
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

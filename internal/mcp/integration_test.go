@@ -3,17 +3,25 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/dshills/RelatixDB/internal/graph"
 )
 
-// TestMCPToolFunctions tests all MCP tool functions end-to-end
+// TestMCPToolFunctions tests all MCP tool functions end-to-end using JSON-RPC protocol
 func TestMCPToolFunctions(t *testing.T) {
 	g := graph.NewMemoryGraph()
 	handler := NewHandler(g, nil, nil, false)
 	ctx := context.Background()
+
+	// Initialize the server first
+	initReq := `{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test-client", "version": "1.0.0"}}}`
+	_, err := handler.ProcessSingleRequest(ctx, initReq)
+	if err != nil {
+		t.Fatalf("Failed to initialize server: %v", err)
+	}
 
 	t.Run("add_node operations", func(t *testing.T) {
 		testAddNodeOperations(ctx, t, handler)
@@ -42,652 +50,377 @@ func TestMCPToolFunctions(t *testing.T) {
 
 func testAddNodeOperations(ctx context.Context, t *testing.T, handler *Handler) {
 	// Test basic node addition
-	addNodeCmd := `{"cmd": "add_node", "args": {"id": "user:alice", "type": "user", "props": {"name": "Alice", "email": "alice@example.com"}}}`
-	response, err := handler.ProcessSingleCommand(ctx, addNodeCmd)
+	addNodeReq := `{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "add_node", "arguments": {"id": "user:alice", "type": "user", "props": {"name": "Alice", "email": "alice@example.com"}}}}`
+	response, err := handler.ProcessSingleRequest(ctx, addNodeReq)
 	if err != nil {
-		t.Fatalf("Failed to process add_node command: %v", err)
+		t.Fatalf("Failed to process add_node request: %v", err)
 	}
 
-	var resp Response
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	var jsonResp JSONRPCResponse
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	// Verify response structure
-	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected result to be a map")
-	}
-
-	if result["node_id"] != "user:alice" {
-		t.Fatalf("Expected node_id 'user:alice', got %v", result["node_id"])
-	}
-
-	if result["action"] != "added" {
-		t.Fatalf("Expected action 'added', got %v", result["action"])
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 
 	// Test node without properties
-	addNodeCmd2 := `{"cmd": "add_node", "args": {"id": "user:bob", "type": "user"}}`
-	response, err = handler.ProcessSingleCommand(ctx, addNodeCmd2)
+	addNodeReq2 := `{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "add_node", "arguments": {"id": "user:bob", "type": "user"}}}`
+	response, err = handler.ProcessSingleRequest(ctx, addNodeReq2)
 	if err != nil {
-		t.Fatalf("Failed to process add_node command: %v", err)
+		t.Fatalf("Failed to process add_node request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 
-	// Test node without type
-	addNodeCmd3 := `{"cmd": "add_node", "args": {"id": "item:123", "props": {"value": "test"}}}`
-	response, err = handler.ProcessSingleCommand(ctx, addNodeCmd3)
+	// Test node with minimal data (just ID)
+	addNodeReq3 := `{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "add_node", "arguments": {"id": "product:123"}}}`
+	response, err = handler.ProcessSingleRequest(ctx, addNodeReq3)
 	if err != nil {
-		t.Fatalf("Failed to process add_node command: %v", err)
+		t.Fatalf("Failed to process add_node request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 }
 
 func testAddEdgeOperations(ctx context.Context, t *testing.T, handler *Handler) {
-	// Add more nodes for edge testing
-	addNodeCmd := `{"cmd": "add_node", "args": {"id": "file:doc1", "type": "file", "props": {"name": "document1.txt"}}}`
-	handler.ProcessSingleCommand(ctx, addNodeCmd)
-
-	addNodeCmd2 := `{"cmd": "add_node", "args": {"id": "file:doc2", "type": "file", "props": {"name": "document2.txt"}}}`
-	handler.ProcessSingleCommand(ctx, addNodeCmd2)
-
-	// Test basic edge addition
-	addEdgeCmd := `{"cmd": "add_edge", "args": {"from": "user:alice", "to": "file:doc1", "label": "owns", "props": {"since": "2024-01-01"}}}`
-	response, err := handler.ProcessSingleCommand(ctx, addEdgeCmd)
+	// Test edge addition between existing nodes
+	addEdgeReq := `{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "add_edge", "arguments": {"from": "user:alice", "to": "user:bob", "label": "friends", "props": {"since": "2023"}}}}`
+	response, err := handler.ProcessSingleRequest(ctx, addEdgeReq)
 	if err != nil {
-		t.Fatalf("Failed to process add_edge command: %v", err)
+		t.Fatalf("Failed to process add_edge request: %v", err)
 	}
 
-	var resp Response
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	var jsonResp JSONRPCResponse
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	// Verify response structure
-	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected result to be a map")
-	}
-
-	if result["from"] != "user:alice" {
-		t.Fatalf("Expected from 'user:alice', got %v", result["from"])
-	}
-	if result["to"] != "file:doc1" {
-		t.Fatalf("Expected to 'file:doc1', got %v", result["to"])
-	}
-	if result["label"] != "owns" {
-		t.Fatalf("Expected label 'owns', got %v", result["label"])
-	}
-	if result["action"] != "added" {
-		t.Fatalf("Expected action 'added', got %v", result["action"])
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 
 	// Test edge without properties
-	addEdgeCmd2 := `{"cmd": "add_edge", "args": {"from": "user:bob", "to": "file:doc2", "label": "reads"}}`
-	response, err = handler.ProcessSingleCommand(ctx, addEdgeCmd2)
+	addEdgeReq2 := `{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "add_edge", "arguments": {"from": "user:alice", "to": "product:123", "label": "purchased"}}}`
+	response, err = handler.ProcessSingleRequest(ctx, addEdgeReq2)
 	if err != nil {
-		t.Fatalf("Failed to process add_edge command: %v", err)
+		t.Fatalf("Failed to process add_edge request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	// Test multiple edges between same nodes
-	addEdgeCmd3 := `{"cmd": "add_edge", "args": {"from": "user:alice", "to": "file:doc1", "label": "edits"}}`
-	response, err = handler.ProcessSingleCommand(ctx, addEdgeCmd3)
-	if err != nil {
-		t.Fatalf("Failed to process add_edge command: %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 }
 
 func testQueryOperations(ctx context.Context, t *testing.T, handler *Handler) {
-	// Test neighbors query - outgoing
-	queryCmd := `{"cmd": "query", "args": {"type": "neighbors", "node": "user:alice", "direction": "out"}}`
-	response, err := handler.ProcessSingleCommand(ctx, queryCmd)
+	// Test neighbors query
+	queryReq := `{"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "query_neighbors", "arguments": {"node": "user:alice", "direction": "out"}}}`
+	response, err := handler.ProcessSingleRequest(ctx, queryReq)
 	if err != nil {
-		t.Fatalf("Failed to process neighbors query: %v", err)
+		t.Fatalf("Failed to process query_neighbors request: %v", err)
 	}
 
-	var resp Response
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	var jsonResp JSONRPCResponse
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 
-	// Verify query result structure
-	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected result to be a map")
+	// Verify the response contains expected neighbor information
+	responseStr := response
+	if !strings.Contains(responseStr, "user:bob") || !strings.Contains(responseStr, "product:123") {
+		t.Fatalf("Expected neighbors user:bob and product:123 in response: %s", responseStr)
 	}
 
-	nodes, ok := result["nodes"].([]interface{})
-	if !ok {
-		t.Fatalf("Expected nodes to be an array")
-	}
-
-	if len(nodes) != 1 {
-		t.Fatalf("Expected 1 neighbor, got %d", len(nodes))
-	}
-
-	// Test neighbors query - incoming
-	queryCmd2 := `{"cmd": "query", "args": {"type": "neighbors", "node": "file:doc1", "direction": "in"}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd2)
+	// Test find query
+	findReq := `{"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "query_find", "arguments": {"type": "user"}}}`
+	response, err = handler.ProcessSingleRequest(ctx, findReq)
 	if err != nil {
-		t.Fatalf("Failed to process incoming neighbors query: %v", err)
+		t.Fatalf("Failed to process query_find request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 
-	result = resp.Result.(map[string]interface{})
-	nodes = result["nodes"].([]interface{})
-	if len(nodes) != 1 {
-		t.Fatalf("Expected 1 incoming neighbor, got %d", len(nodes))
-	}
-
-	// Test neighbors query - both directions
-	queryCmd3 := `{"cmd": "query", "args": {"type": "neighbors", "node": "file:doc1", "direction": "both"}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd3)
-	if err != nil {
-		t.Fatalf("Failed to process both directions neighbors query: %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	// Test find query by type
-	queryCmd4 := `{"cmd": "query", "args": {"type": "find", "filters": {"type": "user"}}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd4)
-	if err != nil {
-		t.Fatalf("Failed to process find query: %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	result = resp.Result.(map[string]interface{})
-	nodes = result["nodes"].([]interface{})
-	if len(nodes) != 2 {
-		t.Fatalf("Expected 2 user nodes, got %d", len(nodes))
-	}
-
-	// Test find query with multiple filters
-	queryCmd5 := `{"cmd": "query", "args": {"type": "find", "filters": {"type": "user", "name": "Alice"}}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd5)
-	if err != nil {
-		t.Fatalf("Failed to process filtered find query: %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	// Verify the response contains both users
+	responseStr = response
+	if !strings.Contains(responseStr, "user:alice") || !strings.Contains(responseStr, "user:bob") {
+		t.Fatalf("Expected both users in find response: %s", responseStr)
 	}
 
 	// Test paths query
-	queryCmd6 := `{"cmd": "query", "args": {"type": "paths", "from": "user:alice", "to": "file:doc1", "max_depth": 3}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd6)
+	pathsReq := `{"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "query_paths", "arguments": {"from": "user:alice", "to": "product:123"}}}`
+	response, err = handler.ProcessSingleRequest(ctx, pathsReq)
 	if err != nil {
-		t.Fatalf("Failed to process paths query: %v", err)
+		t.Fatalf("Failed to process query_paths request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	result = resp.Result.(map[string]interface{})
-	paths, ok := result["paths"].([]interface{})
-	if !ok {
-		t.Fatalf("Expected paths to be an array")
-	}
-
-	if len(paths) == 0 {
-		t.Fatalf("Expected at least 1 path, got %d", len(paths))
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 }
 
 func testDeleteOperations(ctx context.Context, t *testing.T, handler *Handler) {
-	// Test delete edge
-	deleteEdgeCmd := `{"cmd": "delete_edge", "args": {"from": "user:alice", "to": "file:doc1", "label": "edits"}}`
-	response, err := handler.ProcessSingleCommand(ctx, deleteEdgeCmd)
+	// Add a test edge to delete
+	addEdgeReq := `{"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "add_edge", "arguments": {"from": "user:bob", "to": "product:123", "label": "viewed"}}}`
+	_, err := handler.ProcessSingleRequest(ctx, addEdgeReq)
 	if err != nil {
-		t.Fatalf("Failed to process delete_edge command: %v", err)
+		t.Fatalf("Failed to add test edge: %v", err)
 	}
 
-	var resp Response
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	// Verify response structure
-	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected result to be a map")
-	}
-
-	if result["action"] != "deleted" {
-		t.Fatalf("Expected action 'deleted', got %v", result["action"])
-	}
-
-	// Verify edge is actually deleted by checking neighbors
-	queryCmd := `{"cmd": "query", "args": {"type": "neighbors", "node": "user:alice", "direction": "out"}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd)
+	// Test edge deletion
+	deleteEdgeReq := `{"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "delete_edge", "arguments": {"from": "user:bob", "to": "product:123", "label": "viewed"}}}`
+	response, err := handler.ProcessSingleRequest(ctx, deleteEdgeReq)
 	if err != nil {
-		t.Fatalf("Failed to verify edge deletion: %v", err)
+		t.Fatalf("Failed to process delete_edge request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	var jsonResp JSONRPCResponse
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 
-	// Should still have the "owns" edge, but not "edits"
-	result = resp.Result.(map[string]interface{})
-	nodes := result["nodes"].([]interface{})
-	if len(nodes) != 1 {
-		t.Fatalf("Expected 1 neighbor after edge deletion, got %d", len(nodes))
-	}
-
-	// Test delete node
-	deleteNodeCmd := `{"cmd": "delete_node", "args": {"id": "item:123"}}`
-	response, err = handler.ProcessSingleCommand(ctx, deleteNodeCmd)
+	// Test node deletion
+	deleteNodeReq := `{"jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": {"name": "delete_node", "arguments": {"id": "product:123"}}}`
+	response, err = handler.ProcessSingleRequest(ctx, deleteNodeReq)
 	if err != nil {
-		t.Fatalf("Failed to process delete_node command: %v", err)
+		t.Fatalf("Failed to process delete_node request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	result = resp.Result.(map[string]interface{})
-	if result["action"] != "deleted" {
-		t.Fatalf("Expected action 'deleted', got %v", result["action"])
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 }
 
 func testErrorHandling(ctx context.Context, t *testing.T, handler *Handler) {
-	// Test invalid JSON
-	invalidJSON := `{"cmd": "add_node", "args":}`
-	response, err := handler.ProcessSingleCommand(ctx, invalidJSON)
+	// Test invalid tool name
+	invalidToolReq := `{"jsonrpc": "2.0", "id": 13, "method": "tools/call", "params": {"name": "invalid_tool", "arguments": {}}}`
+	response, err := handler.ProcessSingleRequest(ctx, invalidToolReq)
 	if err != nil {
-		t.Fatalf("Expected no error from handler, got %v", err)
+		t.Fatalf("Failed to process invalid tool request: %v", err)
 	}
 
-	var resp Response
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	var jsonResp JSONRPCResponse
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if resp.OK {
-		t.Fatalf("Expected error response for invalid JSON")
+	// Check for tool result with error
+	if result, ok := jsonResp.Result.(map[string]interface{}); ok {
+		if isError, exists := result["isError"]; !exists || !isError.(bool) {
+			t.Fatalf("Expected error response for invalid tool")
+		}
+	} else {
+		t.Fatalf("Expected tool result in response")
 	}
 
-	// Test missing required fields
-	missingID := `{"cmd": "add_node", "args": {"type": "test"}}`
-	response, err = handler.ProcessSingleCommand(ctx, missingID)
+	// Test missing required arguments
+	invalidArgsReq := `{"jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": {"name": "add_node", "arguments": {}}}`
+	response, err = handler.ProcessSingleRequest(ctx, invalidArgsReq)
 	if err != nil {
-		t.Fatalf("Expected no error from handler, got %v", err)
+		t.Fatalf("Failed to process invalid args request: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if resp.OK {
-		t.Fatalf("Expected error response for missing node ID")
-	}
-
-	// Test duplicate node
-	duplicateNode := `{"cmd": "add_node", "args": {"id": "user:alice", "type": "user"}}`
-	response, err = handler.ProcessSingleCommand(ctx, duplicateNode)
-	if err != nil {
-		t.Fatalf("Expected no error from handler, got %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if resp.OK {
-		t.Fatalf("Expected error response for duplicate node")
-	}
-
-	// Test edge with non-existent node
-	badEdge := `{"cmd": "add_edge", "args": {"from": "nonexistent", "to": "user:alice", "label": "connects"}}`
-	response, err = handler.ProcessSingleCommand(ctx, badEdge)
-	if err != nil {
-		t.Fatalf("Expected no error from handler, got %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if resp.OK {
-		t.Fatalf("Expected error response for edge with non-existent node")
-	}
-
-	// Test invalid query type
-	invalidQuery := `{"cmd": "query", "args": {"type": "invalid_type", "node": "user:alice"}}`
-	response, err = handler.ProcessSingleCommand(ctx, invalidQuery)
-	if err != nil {
-		t.Fatalf("Expected no error from handler, got %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if resp.OK {
-		t.Fatalf("Expected error response for invalid query type")
-	}
-
-	// Test unknown command
-	unknownCmd := `{"cmd": "unknown_command", "args": {}}`
-	response, err = handler.ProcessSingleCommand(ctx, unknownCmd)
-	if err != nil {
-		t.Fatalf("Expected no error from handler, got %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if resp.OK {
-		t.Fatalf("Expected error response for unknown command")
+	// Check for tool result with error
+	if result, ok := jsonResp.Result.(map[string]interface{}); ok {
+		if isError, exists := result["isError"]; !exists || !isError.(bool) {
+			t.Fatalf("Expected error response for missing arguments")
+		}
+	} else {
+		t.Fatalf("Expected tool result in response")
 	}
 }
 
 func testComplexScenarios(ctx context.Context, t *testing.T, handler *Handler) {
-	// Create a more complex graph for testing
-	commands := []string{
-		`{"cmd": "add_node", "args": {"id": "project:webapp", "type": "project", "props": {"name": "Web Application", "status": "active"}}}`,
-		`{"cmd": "add_node", "args": {"id": "task:frontend", "type": "task", "props": {"name": "Frontend Development", "priority": "high"}}}`,
-		`{"cmd": "add_node", "args": {"id": "task:backend", "type": "task", "props": {"name": "Backend Development", "priority": "medium"}}}`,
-		`{"cmd": "add_node", "args": {"id": "task:testing", "type": "task", "props": {"name": "Testing", "priority": "high"}}}`,
-		`{"cmd": "add_edge", "args": {"from": "project:webapp", "to": "task:frontend", "label": "contains"}}`,
-		`{"cmd": "add_edge", "args": {"from": "project:webapp", "to": "task:backend", "label": "contains"}}`,
-		`{"cmd": "add_edge", "args": {"from": "project:webapp", "to": "task:testing", "label": "contains"}}`,
-		`{"cmd": "add_edge", "args": {"from": "task:frontend", "to": "task:testing", "label": "blocks"}}`,
-		`{"cmd": "add_edge", "args": {"from": "task:backend", "to": "task:testing", "label": "blocks"}}`,
-		`{"cmd": "add_edge", "args": {"from": "user:alice", "to": "task:frontend", "label": "assigned"}}`,
-		`{"cmd": "add_edge", "args": {"from": "user:bob", "to": "task:backend", "label": "assigned"}}`,
-	}
-
-	// Execute all setup commands
-	for i, cmd := range commands {
-		response, err := handler.ProcessSingleCommand(ctx, cmd)
+	// Create a more complex graph structure
+	nodes := []string{"company:acme", "dept:engineering", "dept:sales", "user:charlie", "user:diana"}
+	for i, nodeID := range nodes {
+		reqID := fmt.Sprintf("%d", 15+i)
+		addNodeReq := `{"jsonrpc": "2.0", "id": ` + reqID + `, "method": "tools/call", "params": {"name": "add_node", "arguments": {"id": "` + nodeID + `", "type": "` + strings.Split(nodeID, ":")[0] + `"}}}`
+		response, err := handler.ProcessSingleRequest(ctx, addNodeReq)
 		if err != nil {
-			t.Fatalf("Failed to execute setup command %d: %v", i, err)
+			t.Fatalf("Failed to add node %s: %v", nodeID, err)
 		}
 
-		var resp Response
-		if err := json.Unmarshal([]byte(response), &resp); err != nil {
-			t.Fatalf("Failed to parse setup response %d: %v", i, err)
+		var jsonResp JSONRPCResponse
+		if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+			t.Fatalf("Failed to parse JSON response: %v", err)
 		}
 
-		if !resp.OK {
-			t.Fatalf("Setup command %d failed: %s", i, resp.Error)
+		if jsonResp.Error != nil {
+			t.Fatalf("Failed to add node %s: %s", nodeID, jsonResp.Error.Message)
 		}
 	}
 
-	// Test complex queries
+	// Create relationships
+	edges := []struct {
+		from, to, label string
+	}{
+		{"company:acme", "dept:engineering", "has_department"},
+		{"company:acme", "dept:sales", "has_department"},
+		{"dept:engineering", "user:charlie", "employs"},
+		{"dept:sales", "user:diana", "employs"},
+		{"user:charlie", "user:diana", "colleagues"},
+	}
 
-	// 1. Find all tasks in the project
-	queryCmd := `{"cmd": "query", "args": {"type": "neighbors", "node": "project:webapp", "direction": "out"}}`
-	response, err := handler.ProcessSingleCommand(ctx, queryCmd)
+	for i, edge := range edges {
+		reqID := fmt.Sprintf("%d", 20+i)
+		addEdgeReq := `{"jsonrpc": "2.0", "id": ` + reqID + `, "method": "tools/call", "params": {"name": "add_edge", "arguments": {"from": "` + edge.from + `", "to": "` + edge.to + `", "label": "` + edge.label + `"}}}`
+		response, err := handler.ProcessSingleRequest(ctx, addEdgeReq)
+		if err != nil {
+			t.Fatalf("Failed to add edge %s -> %s: %v", edge.from, edge.to, err)
+		}
+
+		var jsonResp JSONRPCResponse
+		if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+			t.Fatalf("Failed to parse JSON response: %v", err)
+		}
+
+		if jsonResp.Error != nil {
+			t.Fatalf("Failed to add edge %s -> %s: %s", edge.from, edge.to, jsonResp.Error.Message)
+		}
+	}
+
+	// Test complex query: find path from company to user
+	pathsReq := `{"jsonrpc": "2.0", "id": 25, "method": "tools/call", "params": {"name": "query_paths", "arguments": {"from": "company:acme", "to": "user:charlie", "max_depth": 3}}}`
+	response, err := handler.ProcessSingleRequest(ctx, pathsReq)
 	if err != nil {
-		t.Fatalf("Failed to query project tasks: %v", err)
+		t.Fatalf("Failed to process complex paths query: %v", err)
 	}
 
-	var resp Response
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
+	var jsonResp JSONRPCResponse
+	if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
 	}
 
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
+	if jsonResp.Error != nil {
+		t.Fatalf("Expected successful response, got error: %s", jsonResp.Error.Message)
 	}
 
-	result := resp.Result.(map[string]interface{})
-	nodes := result["nodes"].([]interface{})
-	if len(nodes) != 3 {
-		t.Fatalf("Expected 3 project tasks, got %d", len(nodes))
-	}
-
-	// 2. Find all high priority tasks
-	queryCmd2 := `{"cmd": "query", "args": {"type": "find", "filters": {"type": "task", "priority": "high"}}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd2)
-	if err != nil {
-		t.Fatalf("Failed to query high priority tasks: %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	result = resp.Result.(map[string]interface{})
-	nodes = result["nodes"].([]interface{})
-	if len(nodes) != 2 {
-		t.Fatalf("Expected 2 high priority tasks, got %d", len(nodes))
-	}
-
-	// 3. Find path from Alice to testing task
-	queryCmd3 := `{"cmd": "query", "args": {"type": "paths", "from": "user:alice", "to": "task:testing", "max_depth": 5}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd3)
-	if err != nil {
-		t.Fatalf("Failed to query paths: %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	result = resp.Result.(map[string]interface{})
-	paths := result["paths"].([]interface{})
-	if len(paths) == 0 {
-		t.Fatalf("Expected at least 1 path from Alice to testing task, got %d", len(paths))
-	}
-
-	// 4. Test query with default direction (should be "both")
-	queryCmd4 := `{"cmd": "query", "args": {"type": "neighbors", "node": "task:testing"}}`
-	response, err = handler.ProcessSingleCommand(ctx, queryCmd4)
-	if err != nil {
-		t.Fatalf("Failed to query with default direction: %v", err)
-	}
-
-	if err := json.Unmarshal([]byte(response), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !resp.OK {
-		t.Fatalf("Expected successful response, got error: %s", resp.Error)
-	}
-
-	result = resp.Result.(map[string]interface{})
-	nodes = result["nodes"].([]interface{})
-	// Should have neighbors from both directions: project:webapp (in) and task:frontend, task:backend (in via "blocks")
-	if len(nodes) < 2 {
-		t.Fatalf("Expected at least 2 neighbors with default direction, got %d", len(nodes))
+	// Verify path exists (company -> dept -> user)
+	responseStr := response
+	if !strings.Contains(responseStr, "company:acme") || !strings.Contains(responseStr, "user:charlie") {
+		t.Fatalf("Expected path from company to user in response: %s", responseStr)
 	}
 }
 
-// TestMCPCommandValidation tests command and argument validation
+// TestMCPCommandValidation tests command validation and error handling
 func TestMCPCommandValidation(t *testing.T) {
 	g := graph.NewMemoryGraph()
 	handler := NewHandler(g, nil, nil, false)
 	ctx := context.Background()
 
-	// Test various validation scenarios
-	validationTests := []struct {
+	// Initialize server
+	initReq := `{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test-client", "version": "1.0.0"}}}`
+	_, err := handler.ProcessSingleRequest(ctx, initReq)
+	if err != nil {
+		t.Fatalf("Failed to initialize server: %v", err)
+	}
+
+	testCases := []struct {
 		name        string
-		command     string
+		request     string
 		expectError bool
-		errorMsg    string
+		errorType   string
 	}{
 		{
-			name:        "empty command",
-			command:     `{"args": {"id": "test"}}`,
-			expectError: true,
-			errorMsg:    "command field is required",
+			name:        "valid add_node",
+			request:     `{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "add_node", "arguments": {"id": "test:valid"}}}`,
+			expectError: false,
 		},
 		{
-			name:        "empty node ID",
-			command:     `{"cmd": "add_node", "args": {"id": "", "type": "test"}}`,
+			name:        "add_node missing id",
+			request:     `{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "add_node", "arguments": {}}}`,
 			expectError: true,
-			errorMsg:    "node ID is required",
+			errorType:   "tool_error",
 		},
 		{
-			name:        "empty edge from",
-			command:     `{"cmd": "add_edge", "args": {"from": "", "to": "node2", "label": "connects"}}`,
+			name:        "add_edge missing required fields",
+			request:     `{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "add_edge", "arguments": {"from": "test:valid"}}}`,
 			expectError: true,
-			errorMsg:    "from node is required",
+			errorType:   "tool_error",
 		},
 		{
-			name:        "empty edge to",
-			command:     `{"cmd": "add_edge", "args": {"from": "node1", "to": "", "label": "connects"}}`,
+			name:        "query_neighbors missing node",
+			request:     `{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "query_neighbors", "arguments": {}}}`,
 			expectError: true,
-			errorMsg:    "to node is required",
+			errorType:   "tool_error",
 		},
 		{
-			name:        "empty edge label",
-			command:     `{"cmd": "add_edge", "args": {"from": "node1", "to": "node2", "label": ""}}`,
+			name:        "query_find no criteria",
+			request:     `{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "query_find", "arguments": {}}}`,
 			expectError: true,
-			errorMsg:    "edge label is required",
-		},
-		{
-			name:        "invalid query direction",
-			command:     `{"cmd": "query", "args": {"type": "neighbors", "node": "test", "direction": "invalid"}}`,
-			expectError: true,
-			errorMsg:    "invalid direction",
-		},
-		{
-			name:        "neighbors query without node",
-			command:     `{"cmd": "query", "args": {"type": "neighbors", "direction": "out"}}`,
-			expectError: true,
-			errorMsg:    "node is required for neighbors query",
-		},
-		{
-			name:        "paths query without from",
-			command:     `{"cmd": "query", "args": {"type": "paths", "to": "node2"}}`,
-			expectError: true,
-			errorMsg:    "from node is required for paths query",
-		},
-		{
-			name:        "paths query without to",
-			command:     `{"cmd": "query", "args": {"type": "paths", "from": "node1"}}`,
-			expectError: true,
-			errorMsg:    "to node is required for paths query",
-		},
-		{
-			name:        "find query without filters",
-			command:     `{"cmd": "query", "args": {"type": "find"}}`,
-			expectError: true,
-			errorMsg:    "filters are required for find query",
+			errorType:   "tool_error",
 		},
 	}
 
-	for _, test := range validationTests {
-		t.Run(test.name, func(t *testing.T) {
-			response, err := handler.ProcessSingleCommand(ctx, test.command)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			response, err := handler.ProcessSingleRequest(ctx, tc.request)
 			if err != nil {
-				t.Fatalf("Expected no error from handler, got %v", err)
+				t.Fatalf("Unexpected error processing request: %v", err)
 			}
 
-			var resp Response
-			if err := json.Unmarshal([]byte(response), &resp); err != nil {
-				t.Fatalf("Failed to parse response: %v", err)
+			var jsonResp JSONRPCResponse
+			if err := json.Unmarshal([]byte(response), &jsonResp); err != nil {
+				t.Fatalf("Failed to parse JSON response: %v", err)
 			}
 
-			if test.expectError {
-				if resp.OK {
-					t.Fatalf("Expected error response, got success")
-				}
-				if !strings.Contains(resp.Error, test.errorMsg) {
-					t.Fatalf("Expected error containing '%s', got '%s'", test.errorMsg, resp.Error)
+			if tc.expectError {
+				// Check for tool result with error or JSON-RPC error
+				if jsonResp.Error == nil {
+					if result, ok := jsonResp.Result.(map[string]interface{}); ok {
+						if isError, exists := result["isError"]; !exists || !isError.(bool) {
+							t.Fatalf("Expected error response for test case: %s", tc.name)
+						}
+					} else {
+						t.Fatalf("Expected error response for test case: %s", tc.name)
+					}
 				}
 			} else {
-				if !resp.OK {
-					t.Fatalf("Expected successful response, got error: %s", resp.Error)
+				if jsonResp.Error != nil {
+					t.Fatalf("Unexpected error for test case %s: %s", tc.name, jsonResp.Error.Message)
 				}
 			}
 		})

@@ -10,10 +10,10 @@ A high-performance, local graph database designed for use as a Model Context Pro
   - Node insertion: 1.084µs (target: <100µs) - 92x faster
   - Edge insertion: 1.708µs (target: <150µs) - 88x faster  
   - Neighbor queries: 1.042µs (target: <1ms) - 959x faster
-- **MCP Protocol Support**: Full JSON-based stdio interface for LLM integration
+- **Standard MCP Protocol**: Full JSON-RPC 2.0 compliance with tool discovery and execution
 - **Dual Storage Modes**: In-memory for speed, persistent BoltDB for durability
 - **Thread-Safe Operations**: Concurrent access with proper locking
-- **Comprehensive Query Engine**: Neighbors, paths, and property-based search
+- **Comprehensive Tool Set**: 7 MCP tools covering all graph operations
 - **Multigraph Support**: Multiple edge types between same nodes
 
 ## Installation
@@ -28,7 +28,7 @@ A high-performance, local graph database designed for use as a Model Context Pro
 ```bash
 git clone https://github.com/dshills/RelatixDB.git
 cd RelatixDB
-go build -o relatixdb ./cmd/relatixdb
+make build
 ```
 
 ### Install with Go
@@ -42,22 +42,25 @@ go install github.com/dshills/RelatixDB/cmd/relatixdb@latest
 ### In-Memory Mode (Default)
 
 ```bash
-# Start RelatixDB in in-memory mode
-echo '{"cmd": "add_node", "args": {"id": "user:alice", "type": "user", "props": {"name": "Alice"}}}' | ./relatixdb
+# Start RelatixDB MCP server
+./build/relatixdb
+
+# Test with initialization and tool calls
+echo -e '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}\n{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}' | ./build/relatixdb
 ```
 
 ### Persistent Mode
 
 ```bash
 # Start with persistent storage
-echo '{"cmd": "add_node", "args": {"id": "user:bob", "type": "user", "props": {"name": "Bob"}}}' | ./relatixdb -db mydata.db
+./build/relatixdb -db mydata.db
 ```
 
 ### Debug Mode
 
 ```bash
 # Enable debug logging (to stderr)
-./relatixdb -debug
+./build/relatixdb -debug
 ```
 
 ## Usage
@@ -74,69 +77,206 @@ OPTIONS:
   -db PATH      Database file path (optional, uses in-memory if not specified)
 ```
 
-### MCP Protocol Commands
+### MCP Protocol Interface
 
-RelatixDB operates via JSON commands on stdin with JSON responses on stdout:
+RelatixDB implements the Model Context Protocol (MCP) using JSON-RPC 2.0 over stdio. All communication follows the standard MCP specification.
 
-#### Add Node
+#### Server Initialization
+
 ```json
-{"cmd": "add_node", "args": {"id": "user:1", "type": "user", "props": {"name": "Alice", "email": "alice@example.com"}}}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "your-client",
+      "version": "1.0.0"
+    }
+  }
+}
 ```
 
-#### Add Edge
+#### Tool Discovery
+
 ```json
-{"cmd": "add_edge", "args": {"from": "user:1", "to": "user:2", "label": "follows", "props": {"since": "2024-01-01"}}}
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list"
+}
 ```
 
-#### Query Neighbors
+#### Available MCP Tools
+
+RelatixDB provides 7 MCP tools for graph operations:
+
+##### 1. **add_node** - Add Node to Graph
 ```json
-{"cmd": "query", "args": {"type": "neighbors", "node": "user:1", "direction": "out"}}
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "add_node",
+    "arguments": {
+      "id": "user:alice",
+      "type": "user",
+      "props": {
+        "name": "Alice",
+        "email": "alice@example.com"
+      }
+    }
+  }
+}
 ```
 
-#### Find Nodes by Type
+##### 2. **add_edge** - Add Edge Between Nodes
 ```json
-{"cmd": "query", "args": {"type": "find", "filters": {"type": "user"}}}
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "add_edge",
+    "arguments": {
+      "from": "user:alice",
+      "to": "user:bob",
+      "label": "follows",
+      "props": {
+        "since": "2024-01-01"
+      }
+    }
+  }
+}
 ```
 
-#### Find Paths Between Nodes
+##### 3. **query_neighbors** - Find Connected Nodes
 ```json
-{"cmd": "query", "args": {"type": "paths", "from": "user:1", "to": "user:3", "max_depth": 3}}
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "query_neighbors",
+    "arguments": {
+      "node": "user:alice",
+      "direction": "out",
+      "label": "follows"
+    }
+  }
+}
 ```
 
-#### Delete Node
+##### 4. **query_paths** - Find Paths Between Nodes
 ```json
-{"cmd": "delete_node", "args": {"id": "user:1"}}
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/call",
+  "params": {
+    "name": "query_paths",
+    "arguments": {
+      "from": "user:alice",
+      "to": "user:charlie",
+      "max_depth": 3
+    }
+  }
+}
 ```
 
-#### Delete Edge
+##### 5. **query_find** - Search Nodes by Criteria
 ```json
-{"cmd": "delete_edge", "args": {"from": "user:1", "to": "user:2", "label": "follows"}}
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "query_find",
+    "arguments": {
+      "type": "user",
+      "props": {
+        "status": "active"
+      }
+    }
+  }
+}
+```
+
+##### 6. **delete_node** - Remove Node and Connected Edges
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tools/call",
+  "params": {
+    "name": "delete_node",
+    "arguments": {
+      "id": "user:alice"
+    }
+  }
+}
+```
+
+##### 7. **delete_edge** - Remove Specific Edge
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "method": "tools/call",
+  "params": {
+    "name": "delete_edge",
+    "arguments": {
+      "from": "user:alice",
+      "to": "user:bob",
+      "label": "follows"
+    }
+  }
+}
 ```
 
 ### Response Format
 
-All responses follow this format:
+All responses follow JSON-RPC 2.0 format:
 
+**Success Response:**
 ```json
 {
-  "ok": true,
-  "result": { ... },
-  "error": null
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Successfully added node 'user:alice' with type 'user'"
+      }
+    ]
+  }
 }
 ```
 
-Error responses:
+**Error Response:**
 ```json
 {
-  "ok": false,
-  "result": null,
-  "error": "error message"
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Error: id is required and must be a string"
+      }
+    ],
+    "isError": true
+  }
 }
 ```
 
 ## Claude Code Integration
 
-RelatixDB can be integrated with Claude Code as an MCP (Model Context Protocol) server to provide graph database capabilities directly within your AI-assisted development workflow.
+RelatixDB integrates seamlessly with Claude Code as a Model Context Protocol (MCP) server, providing graph database capabilities directly within your AI-assisted development workflow.
 
 ### Prerequisites
 
@@ -158,18 +298,15 @@ make build
 
 #### 2. Configure MCP Server
 
-Add RelatixDB to your Claude Code MCP configuration. The exact method depends on your Claude Code setup:
+Add RelatixDB to your Claude Code MCP configuration:
 
-**Option A: Direct Configuration**
+**Option A: Persistent Storage (Recommended)**
 ```json
 {
-  "mcp": {
-    "servers": {
-      "relatixdb": {
-        "command": "/path/to/RelatixDB/build/relatixdb",
-        "args": ["-db", "/path/to/your/graph.db", "-debug"],
-        "env": {}
-      }
+  "mcpServers": {
+    "relatixdb": {
+      "command": "/path/to/RelatixDB/build/relatixdb",
+      "args": ["-db", "/path/to/your/graph.db", "-debug"]
     }
   }
 }
@@ -178,13 +315,10 @@ Add RelatixDB to your Claude Code MCP configuration. The exact method depends on
 **Option B: In-Memory Mode (Fast, Non-Persistent)**
 ```json
 {
-  "mcp": {
-    "servers": {
-      "relatixdb": {
-        "command": "/path/to/RelatixDB/build/relatixdb",
-        "args": ["-debug"],
-        "env": {}
-      }
+  "mcpServers": {
+    "relatixdb": {
+      "command": "/path/to/RelatixDB/build/relatixdb",
+      "args": ["-debug"]
     }
   }
 }
@@ -192,14 +326,7 @@ Add RelatixDB to your Claude Code MCP configuration. The exact method depends on
 
 #### 3. Verify Integration
 
-Start Claude Code and verify the MCP server is running:
-
-```bash
-# In Claude Code, you should be able to use commands like:
-# "Add a node to the graph database"
-# "Query relationships in the database"
-# "Show me all nodes of type 'function'"
-```
+Start Claude Code and verify the MCP server is running. You should see RelatixDB tools available in the tool listing.
 
 ### Using RelatixDB in Claude Code
 
@@ -257,15 +384,27 @@ Once integrated, you can use natural language to interact with your graph databa
 #### For Development Sessions
 Use in-memory mode for fast, temporary storage:
 ```json
-"command": "/path/to/relatixdb",
-"args": ["-debug"]
+{
+  "mcpServers": {
+    "relatixdb": {
+      "command": "/path/to/relatixdb",
+      "args": ["-debug"]
+    }
+  }
+}
 ```
 
 #### For Persistent Projects
 Use persistent storage to maintain context across sessions:
 ```json
-"command": "/path/to/relatixdb",
-"args": ["-db", "~/.claude-code/graphs/myproject.db", "-debug"]
+{
+  "mcpServers": {
+    "relatixdb": {
+      "command": "/path/to/relatixdb",
+      "args": ["-db", "~/.claude-code/graphs/myproject.db", "-debug"]
+    }
+  }
+}
 ```
 
 ### Troubleshooting
@@ -289,37 +428,19 @@ Choose database location based on your workflow:
 
 ### Advanced Configuration
 
-#### Custom Tool Names
-You can customize how RelatixDB appears in Claude Code by modifying the server name:
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "project-knowledge-graph": {
-        "command": "/path/to/relatixdb",
-        "args": ["-db", "./knowledge-graph.db"]
-      }
-    }
-  }
-}
-```
-
 #### Multiple Instances
 Run multiple RelatixDB instances for different purposes:
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "code-graph": {
-        "command": "/path/to/relatixdb",
-        "args": ["-db", "./code-relationships.db"]
-      },
-      "decisions-graph": {
-        "command": "/path/to/relatixdb", 
-        "args": ["-db", "./architectural-decisions.db"]
-      }
+  "mcpServers": {
+    "code-graph": {
+      "command": "/path/to/relatixdb",
+      "args": ["-db", "./code-relationships.db"]
+    },
+    "decisions-graph": {
+      "command": "/path/to/relatixdb", 
+      "args": ["-db", "./architectural-decisions.db"]
     }
   }
 }
@@ -369,16 +490,19 @@ RelatixDB is optimized for high-performance local operations:
 
 ```bash
 # Run all tests
-go test ./...
+make test
 
 # Run with race detection
-go test -race ./...
+make test-race
 
 # Run benchmarks
-go test -bench=. ./internal/graph
+make test-bench
 
-# Test performance targets
-go test -run=TestPerformanceTargets -v ./internal/graph
+# Test MCP protocol implementation
+make test-mcp
+
+# Run full validation (lint, vet, test)
+make validate
 ```
 
 ### Project Structure
@@ -387,7 +511,7 @@ go test -run=TestPerformanceTargets -v ./internal/graph
 ├── cmd/relatixdb/           # Main executable
 ├── internal/
 │   ├── graph/              # Core graph data structures
-│   ├── mcp/                # MCP protocol handling  
+│   ├── mcp/                # MCP protocol handling (JSON-RPC 2.0)
 │   └── storage/            # Persistent storage backends
 ├── docs/                   # Documentation
 └── specs/                  # Technical specifications
@@ -397,13 +521,13 @@ go test -run=TestPerformanceTargets -v ./internal/graph
 
 ```bash
 # Format code
-go fmt ./...
+make fmt
 
-# Run linter (requires golangci-lint)
-golangci-lint run
+# Run linter
+make lint
 
 # Build all packages
-go build ./...
+make build
 ```
 
 ## Use Cases
@@ -422,6 +546,35 @@ go build ./...
 - Lightweight planning and memory
 - Action history tracking
 - Knowledge graph construction
+
+## MCP Protocol Details
+
+### Server Capabilities
+
+RelatixDB declares the following MCP capabilities:
+
+```json
+{
+  "tools": {
+    "listChanged": false
+  }
+}
+```
+
+### Tool Input Schemas
+
+All tools include comprehensive JSON Schema definitions for their parameters:
+
+- **Required parameters**: Clearly marked in schema
+- **Optional parameters**: Documented with defaults
+- **Type validation**: Strict type checking on all inputs
+- **Enum values**: Constrained choices where applicable (e.g., direction: "in", "out", "both")
+
+### Error Handling
+
+- **JSON-RPC errors**: For protocol-level issues
+- **Tool errors**: For application-level errors (returned as tool results with `isError: true`)
+- **Input validation**: Comprehensive parameter validation with descriptive error messages
 
 ## Limitations
 
@@ -450,7 +603,7 @@ This is pre-alpha software. While contributions are welcome, expect:
 1. Check existing issues and discussions
 2. Create feature branch from `main`
 3. Add tests for new functionality
-4. Ensure all tests pass
+4. Ensure all tests pass (`make validate`)
 5. Submit pull request
 
 ## License
@@ -461,10 +614,12 @@ This is pre-alpha software. While contributions are welcome, expect:
 
 ### v0.1.0 (Current)
 - Initial implementation with in-memory graph
-- Full MCP protocol support
+- Full MCP JSON-RPC 2.0 protocol support
+- Standard tool discovery and execution
+- 7 comprehensive MCP tools for graph operations
 - BoltDB persistent storage layer
 - Performance benchmarks exceeding targets by 88-959x (M4 Pro)
-- Comprehensive test suite
+- Comprehensive test suite with MCP protocol validation
 
 ## Support
 
