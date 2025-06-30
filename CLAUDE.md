@@ -70,3 +70,4 @@ go build -o relatixdb ./cmd/relatixdb
 - Use embeddix tools to save and pull relevant project information
 - store builds in build/ directory
 - Use second-opinion to check code before commit
+- Use docs/ for documentation and planning documents
