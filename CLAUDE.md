@@ -100,6 +100,10 @@ golangci-lint run     # Lint code
 - Store builds in build/ directory
 - Use second-opinion to check code before commit
 - Use docs/ for documentation and planning documents
+- Use rekatixdb to understand project structure
+
+## Project Metadata Tracking
+- Store the import relationships from this Go project in RelatixDB, with modules as nodes and "imports" as edge labels
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.

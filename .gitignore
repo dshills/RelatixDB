@@ -72,6 +72,7 @@ data/
 !data/relatix-memory.db
 data/*
 !data/relatix-memory.db
+!data/relatix-graph.db
 backups/
 exports/
 
