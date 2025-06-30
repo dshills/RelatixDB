@@ -22,7 +22,7 @@ type Edge struct {
 
 // Query represents a graph query with various parameters
 type Query struct {
-	Type      string            `json:"type"`      // "neighbors", "paths", "find"
+	Type      string            `json:"type"` // "neighbors", "paths", "find"
 	Node      string            `json:"node,omitempty"`
 	Label     string            `json:"label,omitempty"`
 	Direction string            `json:"direction,omitempty"` // "in", "out", "both"
@@ -51,15 +51,15 @@ type Graph interface {
 	AddNode(ctx context.Context, node Node) error
 	GetNode(ctx context.Context, id string) (*Node, error)
 	DeleteNode(ctx context.Context, id string) error
-	
+
 	// Edge operations
 	AddEdge(ctx context.Context, edge Edge) error
 	GetEdge(ctx context.Context, from, to, label string) (*Edge, error)
 	DeleteEdge(ctx context.Context, from, to, label string) error
-	
+
 	// Query operations
 	Query(ctx context.Context, query Query) (*QueryResult, error)
-	
+
 	// Utility operations
 	NodeExists(ctx context.Context, id string) bool
 	GetNodesByType(ctx context.Context, nodeType string) ([]Node, error)

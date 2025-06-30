@@ -11,9 +11,9 @@ import (
 func BenchmarkAddNode(b *testing.B) {
 	g := NewMemoryGraph()
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		node := Node{
 			ID:   fmt.Sprintf("node:%d", i),
@@ -22,7 +22,7 @@ func BenchmarkAddNode(b *testing.B) {
 				"index": fmt.Sprintf("%d", i),
 			},
 		}
-		
+
 		if err := g.AddNode(ctx, node); err != nil {
 			b.Fatalf("Failed to add node: %v", err)
 		}
@@ -33,7 +33,7 @@ func BenchmarkAddNode(b *testing.B) {
 func BenchmarkAddEdge(b *testing.B) {
 	g := NewMemoryGraph()
 	ctx := context.Background()
-	
+
 	// Pre-populate with nodes
 	for i := 0; i < b.N+1; i++ {
 		node := Node{
@@ -42,9 +42,9 @@ func BenchmarkAddEdge(b *testing.B) {
 		}
 		g.AddNode(ctx, node)
 	}
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		edge := Edge{
 			From:  fmt.Sprintf("node:%d", i),
@@ -54,7 +54,7 @@ func BenchmarkAddEdge(b *testing.B) {
 				"weight": "1.0",
 			},
 		}
-		
+
 		if err := g.AddEdge(ctx, edge); err != nil {
 			b.Fatalf("Failed to add edge: %v", err)
 		}
@@ -65,7 +65,7 @@ func BenchmarkAddEdge(b *testing.B) {
 func BenchmarkGetNode(b *testing.B) {
 	g := NewMemoryGraph()
 	ctx := context.Background()
-	
+
 	// Pre-populate with nodes
 	nodeCount := 10000
 	for i := 0; i < nodeCount; i++ {
@@ -75,9 +75,9 @@ func BenchmarkGetNode(b *testing.B) {
 		}
 		g.AddNode(ctx, node)
 	}
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		nodeID := fmt.Sprintf("node:%d", i%nodeCount)
 		_, err := g.GetNode(ctx, nodeID)
@@ -91,11 +91,11 @@ func BenchmarkGetNode(b *testing.B) {
 func BenchmarkGetNeighbors(b *testing.B) {
 	g := NewMemoryGraph()
 	ctx := context.Background()
-	
+
 	// Create a graph with 1000 nodes, each connected to 10 neighbors
 	nodeCount := 1000
 	neighborsPerNode := 10
-	
+
 	// Add nodes
 	for i := 0; i < nodeCount; i++ {
 		node := Node{
@@ -104,7 +104,7 @@ func BenchmarkGetNeighbors(b *testing.B) {
 		}
 		g.AddNode(ctx, node)
 	}
-	
+
 	// Add edges (each node connects to next 10 nodes, wrapping around)
 	for i := 0; i < nodeCount; i++ {
 		for j := 1; j <= neighborsPerNode; j++ {
@@ -117,9 +117,9 @@ func BenchmarkGetNeighbors(b *testing.B) {
 			g.AddEdge(ctx, edge)
 		}
 	}
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		nodeID := fmt.Sprintf("node:%d", i%nodeCount)
 		_, err := g.GetNeighbors(ctx, nodeID, "out")
@@ -133,10 +133,10 @@ func BenchmarkGetNeighbors(b *testing.B) {
 func BenchmarkQuery(b *testing.B) {
 	g := NewMemoryGraph()
 	ctx := context.Background()
-	
+
 	// Create a graph for path queries
 	nodeCount := 100
-	
+
 	// Add nodes
 	for i := 0; i < nodeCount; i++ {
 		node := Node{
@@ -145,7 +145,7 @@ func BenchmarkQuery(b *testing.B) {
 		}
 		g.AddNode(ctx, node)
 	}
-	
+
 	// Create a linear chain for path testing
 	for i := 0; i < nodeCount-1; i++ {
 		edge := Edge{
@@ -155,16 +155,16 @@ func BenchmarkQuery(b *testing.B) {
 		}
 		g.AddEdge(ctx, edge)
 	}
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		query := Query{
-			Type:     "neighbors",
-			Node:     fmt.Sprintf("node:%d", i%nodeCount),
+			Type:      "neighbors",
+			Node:      fmt.Sprintf("node:%d", i%nodeCount),
 			Direction: "out",
 		}
-		
+
 		_, err := g.Query(ctx, query)
 		if err != nil {
 			b.Fatalf("Failed to execute query: %v", err)
@@ -176,7 +176,7 @@ func BenchmarkQuery(b *testing.B) {
 func TestPerformanceTargets(t *testing.T) {
 	g := NewMemoryGraph()
 	ctx := context.Background()
-	
+
 	// Test node insertion target: < 100µs
 	start := time.Now()
 	node := Node{
@@ -188,21 +188,21 @@ func TestPerformanceTargets(t *testing.T) {
 	}
 	err := g.AddNode(ctx, node)
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		t.Fatalf("Failed to add node: %v", err)
 	}
-	
+
 	if duration > 100*time.Microsecond {
 		t.Logf("Warning: Node insertion took %v, target is < 100µs", duration)
 	} else {
 		t.Logf("✓ Node insertion: %v (target: < 100µs)", duration)
 	}
-	
+
 	// Add another node for edge test
 	node2 := Node{ID: "perf:test:2", Type: "performance"}
 	g.AddNode(ctx, node2)
-	
+
 	// Test edge insertion target: < 150µs
 	start = time.Now()
 	edge := Edge{
@@ -215,26 +215,26 @@ func TestPerformanceTargets(t *testing.T) {
 	}
 	err = g.AddEdge(ctx, edge)
 	duration = time.Since(start)
-	
+
 	if err != nil {
 		t.Fatalf("Failed to add edge: %v", err)
 	}
-	
+
 	if duration > 150*time.Microsecond {
 		t.Logf("Warning: Edge insertion took %v, target is < 150µs", duration)
 	} else {
 		t.Logf("✓ Edge insertion: %v (target: < 150µs)", duration)
 	}
-	
+
 	// Test neighborhood query target: < 1ms
 	start = time.Now()
 	_, err = g.GetNeighbors(ctx, "perf:test:1", "out")
 	duration = time.Since(start)
-	
+
 	if err != nil {
 		t.Fatalf("Failed to get neighbors: %v", err)
 	}
-	
+
 	if duration > 1*time.Millisecond {
 		t.Logf("Warning: Neighbor query took %v, target is < 1ms", duration)
 	} else {
@@ -246,7 +246,7 @@ func TestPerformanceTargets(t *testing.T) {
 func BenchmarkConcurrentOperations(b *testing.B) {
 	g := NewMemoryGraph()
 	ctx := context.Background()
-	
+
 	// Pre-populate graph
 	for i := 0; i < 1000; i++ {
 		node := Node{
@@ -255,9 +255,9 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 		}
 		g.AddNode(ctx, node)
 	}
-	
+
 	b.ResetTimer()
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {

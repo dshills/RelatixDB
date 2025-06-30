@@ -11,16 +11,16 @@ import (
 type Backend interface {
 	// Open opens or creates a database at the specified path
 	Open(path string) error
-	
+
 	// Close closes the database connection
 	Close() error
-	
+
 	// LoadGraph loads the entire graph from storage
 	LoadGraph(ctx context.Context) (graph.Graph, error)
-	
+
 	// SaveGraph saves the entire graph to storage
 	SaveGraph(ctx context.Context, g graph.Graph) error
-	
+
 	// Transaction operations for atomic updates
 	BeginTransaction() (Transaction, error)
 }
@@ -30,14 +30,14 @@ type Transaction interface {
 	// Node operations
 	SaveNode(node graph.Node) error
 	DeleteNode(id string) error
-	
-	// Edge operations  
+
+	// Edge operations
 	SaveEdge(edge graph.Edge) error
 	DeleteEdge(from, to, label string) error
-	
+
 	// Commit commits the transaction
 	Commit() error
-	
+
 	// Rollback rolls back the transaction
 	Rollback() error
 }
@@ -47,7 +47,7 @@ type Serializer interface {
 	// Serialize converts a graph object to bytes
 	SerializeNode(node graph.Node) ([]byte, error)
 	SerializeEdge(edge graph.Edge) ([]byte, error)
-	
+
 	// Deserialize converts bytes back to graph objects
 	DeserializeNode(data []byte) (graph.Node, error)
 	DeserializeEdge(data []byte) (graph.Edge, error)
@@ -57,7 +57,7 @@ type Serializer interface {
 type Backup interface {
 	// Export exports the graph to a writer
 	Export(ctx context.Context, g graph.Graph, writer io.Writer) error
-	
+
 	// Import imports a graph from a reader
 	Import(ctx context.Context, reader io.Reader) (graph.Graph, error)
 }

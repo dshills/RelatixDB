@@ -30,32 +30,32 @@ func main() {
 		debug       = flag.Bool("debug", false, "Enable debug logging")
 		dbPath      = flag.String("db", "", "Database file path (optional, uses in-memory if not specified)")
 	)
-	
+
 	flag.Parse()
-	
+
 	if *showVersion {
 		fmt.Printf("RelatixDB v%s\n", version)
 		return
 	}
-	
+
 	if *showHelp {
 		showUsage()
 		return
 	}
-	
+
 	// Print banner to stderr so it doesn't interfere with MCP communication
 	if *debug {
 		fmt.Fprintf(os.Stderr, banner, version)
 	}
-	
-	// Create context that can be cancelled
+
+	// Create context that can be canceled
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
 	// Handle shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	
+
 	go func() {
 		sig := <-sigChan
 		if *debug {
@@ -63,7 +63,7 @@ func main() {
 		}
 		cancel()
 	}()
-	
+
 	// Initialize the graph
 	var g graph.Graph
 	if *dbPath != "" {
@@ -73,7 +73,7 @@ func main() {
 			log.Fatalf("Failed to open database: %v", err)
 		}
 		defer backend.Close()
-		
+
 		// Disable auto-save until SaveGraph is fully implemented
 		persistentGraph := storage.NewPersistentGraph(backend, false, 30*time.Second)
 		if err := persistentGraph.Load(ctx); err != nil {
@@ -82,7 +82,7 @@ func main() {
 			}
 		}
 		defer persistentGraph.Close()
-		
+
 		g = persistentGraph
 		if *debug {
 			log.Printf("Using persistent graph storage at %s", *dbPath)
@@ -93,10 +93,10 @@ func main() {
 			log.Printf("Using in-memory graph storage")
 		}
 	}
-	
+
 	// Create MCP handler
 	handler := mcp.NewStdioHandler(g, *debug)
-	
+
 	// Run the MCP handler
 	if err := handler.Run(ctx); err != nil {
 		if err == context.Canceled {

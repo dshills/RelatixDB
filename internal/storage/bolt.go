@@ -47,7 +47,7 @@ func (b *BoltBackend) Open(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
-	
+
 	// Create buckets if they don't exist
 	err = b.db.Update(func(tx *bbolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists([]byte(nodesBucket)); err != nil {
@@ -61,15 +61,15 @@ func (b *BoltBackend) Open(path string) error {
 		}
 		return nil
 	})
-	
+
 	if err != nil {
 		b.db.Close()
 		return fmt.Errorf("failed to create buckets: %w", err)
 	}
-	
+
 	// Update stats
 	b.updateStats()
-	
+
 	return nil
 }
 
@@ -86,9 +86,9 @@ func (b *BoltBackend) LoadGraph(ctx context.Context) (graph.Graph, error) {
 	if b.db == nil {
 		return nil, fmt.Errorf("database not opened")
 	}
-	
+
 	memGraph := graph.NewMemoryGraph()
-	
+
 	err := b.db.View(func(tx *bbolt.Tx) error {
 		// Load nodes
 		nodesBucket := tx.Bucket([]byte(nodesBucket))
@@ -98,18 +98,18 @@ func (b *BoltBackend) LoadGraph(ctx context.Context) (graph.Graph, error) {
 				if err != nil {
 					return fmt.Errorf("failed to deserialize node %s: %w", k, err)
 				}
-				
+
 				if err := memGraph.AddNode(ctx, node); err != nil {
 					return fmt.Errorf("failed to add node %s: %w", k, err)
 				}
-				
+
 				return nil
 			})
 			if err != nil {
 				return err
 			}
 		}
-		
+
 		// Load edges
 		edgesBucket := tx.Bucket([]byte(edgesBucket))
 		if edgesBucket != nil {
@@ -118,25 +118,25 @@ func (b *BoltBackend) LoadGraph(ctx context.Context) (graph.Graph, error) {
 				if err != nil {
 					return fmt.Errorf("failed to deserialize edge %s: %w", k, err)
 				}
-				
+
 				if err := memGraph.AddEdge(ctx, edge); err != nil {
 					return fmt.Errorf("failed to add edge %s: %w", k, err)
 				}
-				
+
 				return nil
 			})
 			if err != nil {
 				return err
 			}
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to load graph: %w", err)
 	}
-	
+
 	b.stats.LastLoaded = time.Now().Unix()
 	return memGraph, nil
 }
@@ -146,7 +146,7 @@ func (b *BoltBackend) SaveGraph(ctx context.Context, g graph.Graph) error {
 	if b.db == nil {
 		return fmt.Errorf("database not opened")
 	}
-	
+
 	// This is a simplified implementation - in production you'd want
 	// to iterate over the graph more efficiently
 	tx, err := b.BeginTransaction()
@@ -154,13 +154,13 @@ func (b *BoltBackend) SaveGraph(ctx context.Context, g graph.Graph) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// TODO: Implement full graph iteration and saving
 	// This requires extending the Graph interface to provide:
 	// - GetAllNodes() method
 	// - GetAllEdges() method
 	// For now, individual operations are persisted immediately via transactions
-	
+
 	return fmt.Errorf("SaveGraph not fully implemented - requires Graph interface extension for iteration")
 }
 
@@ -169,12 +169,12 @@ func (b *BoltBackend) BeginTransaction() (Transaction, error) {
 	if b.db == nil {
 		return nil, fmt.Errorf("database not opened")
 	}
-	
+
 	tx, err := b.db.Begin(true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	
+
 	return &BoltTransaction{
 		tx:         tx,
 		backend:    b,
@@ -188,12 +188,12 @@ func (bt *BoltTransaction) SaveNode(node graph.Node) error {
 	if bucket == nil {
 		return fmt.Errorf("nodes bucket not found")
 	}
-	
+
 	data, err := bt.serializer.SerializeNode(node)
 	if err != nil {
 		return fmt.Errorf("failed to serialize node: %w", err)
 	}
-	
+
 	return bucket.Put([]byte(node.ID), data)
 }
 
@@ -203,7 +203,7 @@ func (bt *BoltTransaction) DeleteNode(id string) error {
 	if bucket == nil {
 		return fmt.Errorf("nodes bucket not found")
 	}
-	
+
 	return bucket.Delete([]byte(id))
 }
 
@@ -213,12 +213,12 @@ func (bt *BoltTransaction) SaveEdge(edge graph.Edge) error {
 	if bucket == nil {
 		return fmt.Errorf("edges bucket not found")
 	}
-	
+
 	data, err := bt.serializer.SerializeEdge(edge)
 	if err != nil {
 		return fmt.Errorf("failed to serialize edge: %w", err)
 	}
-	
+
 	key := fmt.Sprintf("%s:%s:%s", edge.From, edge.To, edge.Label)
 	return bucket.Put([]byte(key), data)
 }
@@ -229,7 +229,7 @@ func (bt *BoltTransaction) DeleteEdge(from, to, label string) error {
 	if bucket == nil {
 		return fmt.Errorf("edges bucket not found")
 	}
-	
+
 	key := fmt.Sprintf("%s:%s:%s", from, to, label)
 	return bucket.Delete([]byte(key))
 }
@@ -254,24 +254,24 @@ func (b *BoltBackend) updateStats() {
 	if b.db == nil {
 		return
 	}
-	
+
 	b.db.View(func(tx *bbolt.Tx) error {
 		// Get database file size (simplified approach)
 		if stat := b.db.Stats(); stat.TxStats.PageCount > 0 {
 			// Use a reasonable page size estimate
-			b.stats.DatabaseSize = int64(stat.TxStats.PageCount * 4096)
+			b.stats.DatabaseSize = int64(stat.TxStats.PageCount) * 4096
 		}
-		
+
 		// Count nodes
 		if bucket := tx.Bucket([]byte(nodesBucket)); bucket != nil {
 			b.stats.NodeCount = bucket.Stats().KeyN
 		}
-		
+
 		// Count edges
 		if bucket := tx.Bucket([]byte(edgesBucket)); bucket != nil {
 			b.stats.EdgeCount = bucket.Stats().KeyN
 		}
-		
+
 		return nil
 	})
 }

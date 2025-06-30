@@ -47,7 +47,7 @@ type DeleteEdgeArgs struct {
 
 // QueryArgs represents arguments for query command
 type QueryArgs struct {
-	Type      string            `json:"type"`               // "neighbors", "paths", "find"
+	Type      string            `json:"type"` // "neighbors", "paths", "find"
 	Node      string            `json:"node,omitempty"`
 	Label     string            `json:"label,omitempty"`
 	Direction string            `json:"direction,omitempty"` // "in", "out", "both"
@@ -63,11 +63,11 @@ func ParseCommand(data []byte) (*Command, error) {
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return nil, fmt.Errorf("failed to parse command: %w", err)
 	}
-	
+
 	if cmd.Cmd == "" {
 		return nil, fmt.Errorf("command field is required")
 	}
-	
+
 	return &cmd, nil
 }
 
@@ -80,35 +80,35 @@ func (c *Command) ParseArgs() (interface{}, error) {
 			return nil, fmt.Errorf("failed to parse add_node args: %w", err)
 		}
 		return args, nil
-		
+
 	case "add_edge":
 		var args AddEdgeArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse add_edge args: %w", err)
 		}
 		return args, nil
-		
+
 	case "delete_node":
 		var args DeleteNodeArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse delete_node args: %w", err)
 		}
 		return args, nil
-		
+
 	case "delete_edge":
 		var args DeleteEdgeArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse delete_edge args: %w", err)
 		}
 		return args, nil
-		
+
 	case "query":
 		var args QueryArgs
 		if err := json.Unmarshal(c.Args, &args); err != nil {
 			return nil, fmt.Errorf("failed to parse query args: %w", err)
 		}
 		return args, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unknown command: %s", c.Cmd)
 	}
@@ -184,7 +184,7 @@ func (a *QueryArgs) Validate() error {
 	if a.Type == "" {
 		return fmt.Errorf("query type is required")
 	}
-	
+
 	switch a.Type {
 	case "neighbors":
 		if a.Node == "" {
@@ -201,12 +201,12 @@ func (a *QueryArgs) Validate() error {
 			return fmt.Errorf("to node is required for paths query")
 		}
 	case "find":
-		if a.Filters == nil || len(a.Filters) == 0 {
+		if len(a.Filters) == 0 {
 			return fmt.Errorf("filters are required for find query")
 		}
 	default:
 		return fmt.Errorf("unknown query type: %s", a.Type)
 	}
-	
+
 	return nil
 }

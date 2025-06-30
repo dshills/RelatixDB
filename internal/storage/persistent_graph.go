@@ -13,7 +13,7 @@ import (
 type PersistentGraph struct {
 	memory  graph.Graph
 	backend Backend
-	
+
 	// Auto-save configuration
 	autoSave     bool
 	saveInterval time.Duration
@@ -36,19 +36,19 @@ func NewPersistentGraph(backend Backend, autoSave bool, saveInterval time.Durati
 func (pg *PersistentGraph) Load(ctx context.Context) error {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
-	
+
 	memGraph, err := pg.backend.LoadGraph(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load from storage: %w", err)
 	}
-	
+
 	pg.memory = memGraph
-	
+
 	// Start auto-save if enabled
 	if pg.autoSave {
 		go pg.autoSaveLoop()
 	}
-	
+
 	return nil
 }
 
@@ -56,7 +56,7 @@ func (pg *PersistentGraph) Load(ctx context.Context) error {
 func (pg *PersistentGraph) Save(ctx context.Context) error {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	
+
 	return pg.backend.SaveGraph(ctx, pg.memory)
 }
 
@@ -64,16 +64,16 @@ func (pg *PersistentGraph) Save(ctx context.Context) error {
 func (pg *PersistentGraph) Close() error {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
-	
+
 	// Stop auto-save
 	if pg.autoSave {
 		close(pg.stopChan)
 	}
-	
+
 	// Skip final save for now since SaveGraph is not implemented
 	// Individual operations are already persisted via transactions
 	// TODO: Implement final save when SaveGraph is complete
-	
+
 	return pg.backend.Close()
 }
 
@@ -81,7 +81,7 @@ func (pg *PersistentGraph) Close() error {
 func (pg *PersistentGraph) autoSaveLoop() {
 	ticker := time.NewTicker(pg.saveInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -101,12 +101,12 @@ func (pg *PersistentGraph) autoSaveLoop() {
 func (pg *PersistentGraph) AddNode(ctx context.Context, node graph.Node) error {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
-	
+
 	// Add to memory first
 	if err := pg.memory.AddNode(ctx, node); err != nil {
 		return err
 	}
-	
+
 	// Persist immediately for critical operations
 	tx, err := pg.backend.BeginTransaction()
 	if err != nil {
@@ -115,19 +115,19 @@ func (pg *PersistentGraph) AddNode(ctx context.Context, node graph.Node) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	if err := tx.SaveNode(node); err != nil {
 		// Rollback memory change
 		pg.memory.DeleteNode(ctx, node.ID)
 		return fmt.Errorf("failed to persist node: %w", err)
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		// Rollback memory change
 		pg.memory.DeleteNode(ctx, node.ID)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (pg *PersistentGraph) AddNode(ctx context.Context, node graph.Node) error {
 func (pg *PersistentGraph) GetNode(ctx context.Context, id string) (*graph.Node, error) {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	
+
 	return pg.memory.GetNode(ctx, id)
 }
 
@@ -143,41 +143,41 @@ func (pg *PersistentGraph) GetNode(ctx context.Context, id string) (*graph.Node,
 func (pg *PersistentGraph) DeleteNode(ctx context.Context, id string) error {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
-	
+
 	// Get node first to check if it exists
 	node, err := pg.memory.GetNode(ctx, id)
 	if err != nil {
 		return err
 	}
-	
+
 	// Begin transaction
 	tx, err := pg.backend.BeginTransaction()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// Delete from memory first
 	if err := pg.memory.DeleteNode(ctx, id); err != nil {
 		return err
 	}
-	
+
 	// Persist deletion
 	if err := tx.DeleteNode(id); err != nil {
 		// Rollback memory change
 		pg.memory.AddNode(ctx, *node)
 		return fmt.Errorf("failed to persist node deletion: %w", err)
 	}
-	
+
 	// TODO: Also delete connected edges from storage
 	// This requires extending the interface to get all edges for a node
-	
+
 	if err := tx.Commit(); err != nil {
 		// Rollback memory change
 		pg.memory.AddNode(ctx, *node)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -185,12 +185,12 @@ func (pg *PersistentGraph) DeleteNode(ctx context.Context, id string) error {
 func (pg *PersistentGraph) AddEdge(ctx context.Context, edge graph.Edge) error {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
-	
+
 	// Add to memory first
 	if err := pg.memory.AddEdge(ctx, edge); err != nil {
 		return err
 	}
-	
+
 	// Persist immediately
 	tx, err := pg.backend.BeginTransaction()
 	if err != nil {
@@ -199,19 +199,19 @@ func (pg *PersistentGraph) AddEdge(ctx context.Context, edge graph.Edge) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	if err := tx.SaveEdge(edge); err != nil {
 		// Rollback memory change
 		pg.memory.DeleteEdge(ctx, edge.From, edge.To, edge.Label)
 		return fmt.Errorf("failed to persist edge: %w", err)
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		// Rollback memory change
 		pg.memory.DeleteEdge(ctx, edge.From, edge.To, edge.Label)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -219,7 +219,7 @@ func (pg *PersistentGraph) AddEdge(ctx context.Context, edge graph.Edge) error {
 func (pg *PersistentGraph) GetEdge(ctx context.Context, from, to, label string) (*graph.Edge, error) {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	
+
 	return pg.memory.GetEdge(ctx, from, to, label)
 }
 
@@ -227,38 +227,38 @@ func (pg *PersistentGraph) GetEdge(ctx context.Context, from, to, label string) 
 func (pg *PersistentGraph) DeleteEdge(ctx context.Context, from, to, label string) error {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
-	
+
 	// Get edge first to check if it exists
 	edge, err := pg.memory.GetEdge(ctx, from, to, label)
 	if err != nil {
 		return err
 	}
-	
+
 	// Begin transaction
 	tx, err := pg.backend.BeginTransaction()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// Delete from memory first
 	if err := pg.memory.DeleteEdge(ctx, from, to, label); err != nil {
 		return err
 	}
-	
+
 	// Persist deletion
 	if err := tx.DeleteEdge(from, to, label); err != nil {
 		// Rollback memory change
 		pg.memory.AddEdge(ctx, *edge)
 		return fmt.Errorf("failed to persist edge deletion: %w", err)
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		// Rollback memory change
 		pg.memory.AddEdge(ctx, *edge)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -266,7 +266,7 @@ func (pg *PersistentGraph) DeleteEdge(ctx context.Context, from, to, label strin
 func (pg *PersistentGraph) Query(ctx context.Context, query graph.Query) (*graph.QueryResult, error) {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	
+
 	return pg.memory.Query(ctx, query)
 }
 
@@ -274,7 +274,7 @@ func (pg *PersistentGraph) Query(ctx context.Context, query graph.Query) (*graph
 func (pg *PersistentGraph) NodeExists(ctx context.Context, id string) bool {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	
+
 	return pg.memory.NodeExists(ctx, id)
 }
 
@@ -282,7 +282,7 @@ func (pg *PersistentGraph) NodeExists(ctx context.Context, id string) bool {
 func (pg *PersistentGraph) GetNodesByType(ctx context.Context, nodeType string) ([]graph.Node, error) {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	
+
 	return pg.memory.GetNodesByType(ctx, nodeType)
 }
 
@@ -290,6 +290,6 @@ func (pg *PersistentGraph) GetNodesByType(ctx context.Context, nodeType string) 
 func (pg *PersistentGraph) GetNeighbors(ctx context.Context, nodeID, direction string) ([]graph.Node, error) {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
-	
+
 	return pg.memory.GetNeighbors(ctx, nodeID, direction)
 }

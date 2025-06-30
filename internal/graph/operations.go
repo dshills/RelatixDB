@@ -22,11 +22,11 @@ func (ops *Operations) CreateNode(ctx context.Context, node Node) error {
 	if err := node.Validate(); err != nil {
 		return fmt.Errorf("invalid node: %w", err)
 	}
-	
+
 	if ops.graph.NodeExists(ctx, node.ID) {
 		return ErrNodeExists
 	}
-	
+
 	return ops.graph.AddNode(ctx, node)
 }
 
@@ -35,21 +35,21 @@ func (ops *Operations) CreateEdge(ctx context.Context, edge Edge) error {
 	if err := edge.Validate(); err != nil {
 		return fmt.Errorf("invalid edge: %w", err)
 	}
-	
+
 	// Check that both nodes exist
 	if !ops.graph.NodeExists(ctx, edge.From) {
 		return fmt.Errorf("from node '%s' does not exist", edge.From)
 	}
-	
+
 	if !ops.graph.NodeExists(ctx, edge.To) {
 		return fmt.Errorf("to node '%s' does not exist", edge.To)
 	}
-	
+
 	// Check if edge already exists
 	if _, err := ops.graph.GetEdge(ctx, edge.From, edge.To, edge.Label); err == nil {
 		return ErrEdgeExists
 	}
-	
+
 	return ops.graph.AddEdge(ctx, edge)
 }
 
@@ -58,31 +58,31 @@ func (ops *Operations) UpdateNode(ctx context.Context, nodeID string, props map[
 	if nodeID == "" {
 		return ErrEmptyNodeID
 	}
-	
+
 	// Get existing node
 	existingNode, err := ops.graph.GetNode(ctx, nodeID)
 	if err != nil {
 		return err
 	}
-	
+
 	// Update properties
 	if existingNode.Props == nil {
 		existingNode.Props = make(map[string]string)
 	}
-	
+
 	for key, value := range props {
 		existingNode.Props[key] = value
 	}
-	
+
 	// Delete and re-add the node (since we don't have direct update)
 	if err := ops.graph.DeleteNode(ctx, nodeID); err != nil {
 		return fmt.Errorf("failed to delete node for update: %w", err)
 	}
-	
+
 	if err := ops.graph.AddNode(ctx, *existingNode); err != nil {
 		return fmt.Errorf("failed to re-add updated node: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -97,31 +97,31 @@ func (ops *Operations) UpdateEdge(ctx context.Context, from, to, label string, p
 	if label == "" {
 		return ErrEmptyEdgeLabel
 	}
-	
+
 	// Get existing edge
 	existingEdge, err := ops.graph.GetEdge(ctx, from, to, label)
 	if err != nil {
 		return err
 	}
-	
+
 	// Update properties
 	if existingEdge.Props == nil {
 		existingEdge.Props = make(map[string]string)
 	}
-	
+
 	for key, value := range props {
 		existingEdge.Props[key] = value
 	}
-	
+
 	// Delete and re-add the edge
 	if err := ops.graph.DeleteEdge(ctx, from, to, label); err != nil {
 		return fmt.Errorf("failed to delete edge for update: %w", err)
 	}
-	
+
 	if err := ops.graph.AddEdge(ctx, *existingEdge); err != nil {
 		return fmt.Errorf("failed to re-add updated edge: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -132,10 +132,10 @@ func (ops *Operations) GetNodeWithEdges(ctx context.Context, nodeID string) (*No
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	// Get all connected edges (this is a simplified approach)
 	var edges []Edge
-	
+
 	// This would need to be implemented more efficiently in a real system
 	// For now, we'll return just the node
 	return node, edges, nil
