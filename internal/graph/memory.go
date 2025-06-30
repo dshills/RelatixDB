@@ -356,6 +356,40 @@ func (g *MemoryGraph) makeEdgeKey(from, to, label string) string {
 	return from + ":" + to + ":" + label
 }
 
+// GetAllNodes returns all nodes in the graph
+func (g *MemoryGraph) GetAllNodes(ctx context.Context) ([]Node, error) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	if g.closed {
+		return nil, ErrGraphClosed
+	}
+
+	nodes := make([]Node, 0, len(g.nodes))
+	for _, node := range g.nodes {
+		nodes = append(nodes, *node)
+	}
+
+	return nodes, nil
+}
+
+// GetAllEdges returns all edges in the graph
+func (g *MemoryGraph) GetAllEdges(ctx context.Context) ([]Edge, error) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	if g.closed {
+		return nil, ErrGraphClosed
+	}
+
+	edges := make([]Edge, 0, len(g.edges))
+	for _, edge := range g.edges {
+		edges = append(edges, *edge)
+	}
+
+	return edges, nil
+}
+
 // Stats returns statistics about the graph
 func (g *MemoryGraph) Stats() map[string]int {
 	g.mu.RLock()

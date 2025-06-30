@@ -293,3 +293,19 @@ func (pg *PersistentGraph) GetNeighbors(ctx context.Context, nodeID, direction s
 
 	return pg.memory.GetNeighbors(ctx, nodeID, direction)
 }
+
+// GetAllNodes returns all nodes in the graph
+func (pg *PersistentGraph) GetAllNodes(ctx context.Context) ([]graph.Node, error) {
+	pg.mu.RLock()
+	defer pg.mu.RUnlock()
+
+	return pg.memory.GetAllNodes(ctx)
+}
+
+// GetAllEdges returns all edges in the graph
+func (pg *PersistentGraph) GetAllEdges(ctx context.Context) ([]graph.Edge, error) {
+	pg.mu.RLock()
+	defer pg.mu.RUnlock()
+
+	return pg.memory.GetAllEdges(ctx)
+}

@@ -64,6 +64,8 @@ type Graph interface {
 	NodeExists(ctx context.Context, id string) bool
 	GetNodesByType(ctx context.Context, nodeType string) ([]Node, error)
 	GetNeighbors(ctx context.Context, nodeID, direction string) ([]Node, error)
+	GetAllNodes(ctx context.Context) ([]Node, error)
+	GetAllEdges(ctx context.Context) ([]Edge, error)
 }
 
 // Validate checks if a Node is valid

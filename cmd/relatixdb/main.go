@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 	"time"
 
@@ -29,6 +31,7 @@ func main() {
 		showHelp    = flag.Bool("help", false, "Show help information")
 		debug       = flag.Bool("debug", false, "Enable debug logging")
 		dbPath      = flag.String("db", "", "Database file path (optional, uses in-memory if not specified)")
+		dumpPath    = flag.String("dump", "", "Pretty print contents of database file and exit")
 	)
 
 	flag.Parse()
@@ -40,6 +43,11 @@ func main() {
 
 	if *showHelp {
 		showUsage()
+		return
+	}
+
+	if *dumpPath != "" {
+		dumpDatabase(*dumpPath, *debug)
 		return
 	}
 
@@ -109,6 +117,172 @@ func main() {
 	}
 }
 
+func dumpDatabase(dbPath string, debug bool) {
+	// Check if file exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: Database file does not exist: %s\n", dbPath)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+
+	// Initialize persistent graph with BoltDB backend
+	backend := storage.NewBoltBackend()
+	if err := backend.Open(dbPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer backend.Close()
+
+	// Create persistent graph
+	persistentGraph := storage.NewPersistentGraph(backend, false, 30*time.Second)
+	if err := persistentGraph.Load(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load database: %v\n", err)
+		os.Exit(1)
+	}
+	defer persistentGraph.Close()
+
+	// Get all nodes and edges
+	nodes, err := persistentGraph.GetAllNodes(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to get nodes: %v\n", err)
+		os.Exit(1)
+	}
+
+	edges, err := persistentGraph.GetAllEdges(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to get edges: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Pretty print the database contents
+	fmt.Printf("RelatixDB Database Contents: %s\n", dbPath)
+	fmt.Printf("=====================================\n\n")
+
+	// Print statistics
+	fmt.Printf("Statistics:\n")
+	fmt.Printf("  Nodes: %d\n", len(nodes))
+	fmt.Printf("  Edges: %d\n", len(edges))
+
+	// Count types
+	typeCount := make(map[string]int)
+	for _, node := range nodes {
+		if node.Type != "" {
+			typeCount[node.Type]++
+		} else {
+			typeCount["<no-type>"]++
+		}
+	}
+	fmt.Printf("  Types: %d\n", len(typeCount))
+	fmt.Printf("\n")
+
+	// Print type breakdown
+	if len(typeCount) > 0 {
+		fmt.Printf("Node Types:\n")
+		var types []string
+		for t := range typeCount {
+			types = append(types, t)
+		}
+		sort.Strings(types)
+		for _, t := range types {
+			fmt.Printf("  %s: %d nodes\n", t, typeCount[t])
+		}
+		fmt.Printf("\n")
+	}
+
+	// Print nodes
+	if len(nodes) > 0 {
+		fmt.Printf("Nodes:\n")
+		fmt.Printf("------\n")
+
+		// Sort nodes by ID for consistent output
+		sort.Slice(nodes, func(i, j int) bool {
+			return nodes[i].ID < nodes[j].ID
+		})
+
+		for _, node := range nodes {
+			printNode(node, debug)
+		}
+		fmt.Printf("\n")
+	}
+
+	// Print edges
+	if len(edges) > 0 {
+		fmt.Printf("Edges:\n")
+		fmt.Printf("------\n")
+
+		// Sort edges by from, to, label for consistent output
+		sort.Slice(edges, func(i, j int) bool {
+			if edges[i].From != edges[j].From {
+				return edges[i].From < edges[j].From
+			}
+			if edges[i].To != edges[j].To {
+				return edges[i].To < edges[j].To
+			}
+			return edges[i].Label < edges[j].Label
+		})
+
+		for _, edge := range edges {
+			printEdge(edge, debug)
+		}
+	}
+
+	if len(nodes) == 0 && len(edges) == 0 {
+		fmt.Printf("Database is empty.\n")
+	}
+}
+
+func printNode(node graph.Node, debug bool) {
+	fmt.Printf("Node: %s", node.ID)
+	if node.Type != "" {
+		fmt.Printf(" (type: %s)", node.Type)
+	}
+	fmt.Printf("\n")
+
+	printProperties(node.Props, debug)
+	fmt.Printf("\n")
+}
+
+func printEdge(edge graph.Edge, debug bool) {
+	fmt.Printf("Edge: %s -> %s [%s]\n", edge.From, edge.To, edge.Label)
+
+	printProperties(edge.Props, debug)
+	fmt.Printf("\n")
+}
+
+func printProperties(props map[string]string, debug bool) {
+	if len(props) == 0 {
+		return
+	}
+
+	// Sort properties for consistent output
+	keys := make([]string, 0, len(props))
+	for k := range props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	fmt.Printf("  Properties:\n")
+	for _, key := range keys {
+		value := props[key]
+		if debug {
+			// In debug mode, show raw JSON representation
+			if jsonData, err := json.Marshal(value); err == nil {
+				fmt.Printf("    %s: %s\n", key, string(jsonData))
+			} else {
+				fmt.Printf("    %s: %s\n", key, value)
+			}
+		} else {
+			// Pretty print with truncation for long values
+			if len(value) > 100 {
+				fmt.Printf("    %s: %s...\n", key, value[:97])
+			} else {
+				fmt.Printf("    %s: %s\n", key, value)
+			}
+		}
+	}
+}
+
 func showUsage() {
 	fmt.Printf(banner, version)
 	fmt.Println("USAGE:")
@@ -119,6 +293,7 @@ func showUsage() {
 	fmt.Println("  -help         Show this help message")
 	fmt.Println("  -debug        Enable debug logging to stderr")
 	fmt.Println("  -db PATH      Database file path (optional, uses in-memory if not specified)")
+	fmt.Println("  -dump PATH    Pretty print contents of database file and exit")
 	fmt.Println()
 	fmt.Println("DESCRIPTION:")
 	fmt.Println("  RelatixDB is a high-performance local graph database designed for use as an")
