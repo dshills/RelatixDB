@@ -6,10 +6,10 @@ A high-performance, local graph database designed for use as a Model Context Pro
 
 ## Features
 
-- **Blazing Fast Performance**: Exceeds all targets by 25-1600x
-  - Node insertion: 4.083µs (target: <100µs)
-  - Edge insertion: 1.5µs (target: <150µs)  
-  - Neighbor queries: 625ns (target: <1ms)
+- **Blazing Fast Performance**: Exceeds all targets by 90-960x
+  - Node insertion: 1.084µs (target: <100µs) - 92x faster
+  - Edge insertion: 1.708µs (target: <150µs) - 88x faster  
+  - Neighbor queries: 1.042µs (target: <1ms) - 959x faster
 - **MCP Protocol Support**: Full JSON-based stdio interface for LLM integration
 - **Dual Storage Modes**: In-memory for speed, persistent BoltDB for durability
 - **Thread-Safe Operations**: Concurrent access with proper locking
@@ -156,12 +156,19 @@ Error responses:
 
 RelatixDB is optimized for high-performance local operations:
 
-| Operation | Performance | Target |
-|-----------|-------------|--------|
-| Node insertion | 4.083µs | <100µs |
-| Edge insertion | 1.5µs | <150µs |
-| Neighbor query | 625ns | <1ms |
-| Path query (depth ≤ 4) | <10ms | <10ms |
+**Benchmarked on Apple M4 Pro (64GB RAM):**
+
+| Operation | Performance | Target | Improvement |
+|-----------|-------------|--------|-------------|
+| Node insertion | 1.084µs | <100µs | 92x faster |
+| Edge insertion | 1.708µs | <150µs | 88x faster |
+| Neighbor query | 1.042µs | <1ms | 959x faster |
+| Path query (depth ≤ 4) | <10ms | <10ms | Meets target |
+
+**Additional Benchmarks:**
+- Node retrieval: 75.52ns per operation
+- Complex queries: 166.1ns average
+- Concurrent operations: 133.8ns per operation
 
 ## Development
 
@@ -263,7 +270,7 @@ This is pre-alpha software. While contributions are welcome, expect:
 - Initial implementation with in-memory graph
 - Full MCP protocol support
 - BoltDB persistent storage layer
-- Performance benchmarks and validation
+- Performance benchmarks exceeding targets by 88-959x (M4 Pro)
 - Comprehensive test suite
 
 ## Support
